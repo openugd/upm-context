@@ -68,6 +68,18 @@ Read this section if you are migrating from `ContextStartup` / `Service` / `Inje
   A setting is an object — a `ScriptableObject` or any plain object — registered with `AddInstance` and
   taken as an ordinary constructor parameter. The container has no configuration system of its own.
 
+### Changed during the 2.0.0 cycle
+
+Code written against an unreleased snapshot of this package, as the rest of the OpenUGD family was, needs
+these changes.
+
+- **Breaking: `Context.Dispose` rethrows a single failure as itself.** When exactly one service throws
+  while the context is disposed, that exception is rethrown with its original stack trace instead of
+  being wrapped in an `AggregateException`; two or more still arrive as one `AggregateException`. This
+  follows `com.openugd.lifetime` 2.0.0. The same applies to the teardown exception that a failed
+  `BuildAsync` puts second in its `AggregateException`. Migration: catch the exception your service
+  throws (or `Exception`) rather than only `AggregateException`.
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was

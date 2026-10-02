@@ -44,7 +44,16 @@ namespace OpenUGD
 
             var root = lifetime ?? (parent != null ? parent.Lifetime : Lifetime.Eternal);
 
-            _definition = Lifetime.Define(root, nameof(Context));
+            // DefineNested on a terminated lifetime returns a scope that is already terminated. A builder
+            // on one could only ever fail, so say so here, where the dead lifetime was passed in.
+            if (root.IsTerminated)
+            {
+                throw new InvalidOperationException(
+                    "The lifetime passed to Context.CreateBuilder has already terminated, so the context " +
+                    "could never be built. Create the builder from a live lifetime.");
+            }
+
+            _definition = root.DefineNested(nameof(Context));
             _parent = parent;
 
             Services = new ServiceCollection(parent);
@@ -143,8 +152,9 @@ namespace OpenUGD
         /// </exception>
         /// <exception cref="AggregateException">
         /// The build failed <i>and</i> tearing down what had been constructed failed as well. The first
-        /// inner exception is the original failure and the second is the teardown; call
-        /// <see cref="AggregateException.Flatten" /> for the leaves.
+        /// inner exception is the original failure and the second is what the teardown threw: the one
+        /// exception a service threw while disposing, or an <see cref="AggregateException" /> when several
+        /// did. Call <see cref="AggregateException.Flatten" /> for the leaves.
         /// </exception>
         public async Task<Context> BuildAsync(CancellationToken cancellationToken = default(CancellationToken))
         {

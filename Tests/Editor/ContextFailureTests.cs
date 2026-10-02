@@ -468,8 +468,45 @@ namespace OpenUGD.Tests
             Assert.AreEqual(2, error.InnerExceptions.Count);
             Assert.IsInstanceOf<ContextException>(error.InnerExceptions[0],
                 "The first inner exception is the original failure.");
-            Assert.IsInstanceOf<AggregateException>(error.InnerExceptions[1],
-                "The second is the teardown failure.");
+            Assert.IsInstanceOf<InvalidOperationException>(error.InnerExceptions[1],
+                "The second is the teardown failure: a single throwing Dispose arrives as itself.");
+            Assert.AreEqual("dispose failed", error.InnerExceptions[1].Message);
+        }
+
+        [Test]
+        public void DisposeRethrowsASingleServiceFailureAsItselfAfterDisposingTheRest()
+        {
+            var log = new List<string>();
+            var builder = NewBuilder();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<DisposableOne>();
+            builder.Services.Add<ThrowingDisposable>();
+            var context = Build(builder);
+
+            var error = Assert.Throws<InvalidOperationException>(() => context.Dispose());
+
+            Assert.AreEqual("dispose failed", error.Message);
+            CollectionAssert.Contains(log, "dispose:one",
+                "A service that fails to shut down must not leave its siblings undisposed.");
+        }
+
+        [Test]
+        public void SeveralTeardownFailuresArriveAsOneAggregateInTheOrderTheyFailed()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<ThrowingDisposable>();
+            builder.Services.Add<SecondThrowingDisposable>();
+            builder.Services.Add<ThrowingAwakeService>();
+
+            var error = FailToBuild<AggregateException>(builder);
+
+            Assert.AreEqual(2, error.InnerExceptions.Count);
+            Assert.IsInstanceOf<ContextException>(error.InnerExceptions[0]);
+            var teardown = error.InnerExceptions[1] as AggregateException;
+            Assert.IsNotNull(teardown, "Two throwing Dispose calls are reported as one AggregateException.");
+            Assert.AreEqual(new[] { "second dispose failed", "dispose failed" },
+                teardown.InnerExceptions.Select(e => e.Message).ToArray(),
+                "Teardown runs in reverse construction order, and the failures keep that order.");
         }
 
         // ===== cancellation =====
@@ -783,6 +820,11 @@ namespace OpenUGD.Tests
         public sealed class ThrowingDisposable : IDisposable
         {
             public void Dispose() { throw new InvalidOperationException("dispose failed"); }
+        }
+
+        public sealed class SecondThrowingDisposable : IDisposable
+        {
+            public void Dispose() { throw new InvalidOperationException("second dispose failed"); }
         }
 
         public sealed class ThrowingAwakeService : IAwakeService

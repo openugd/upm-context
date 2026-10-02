@@ -284,9 +284,14 @@ namespace OpenUGD
         /// with its own lifetime. Child contexts nested in this one are terminated with it.
         /// </para>
         /// </remarks>
+        /// <exception cref="Exception">
+        /// Exactly one service threw while disposing: that exception, rethrown with its original stack
+        /// trace. Every other service was still disposed — one that fails to shut down cannot leave its
+        /// siblings undisposed.
+        /// </exception>
         /// <exception cref="AggregateException">
-        /// One or more services threw while disposing. Every remaining action still ran — a service that
-        /// fails to shut down cannot leave its siblings undisposed — and the failures are collected here.
+        /// Two or more services threw while disposing, in the order they failed. Every service was still
+        /// disposed.
         /// </exception>
         public void Dispose() => _definition.Terminate();
 

@@ -120,7 +120,7 @@ singletons die with its own `Lifetime` while the parent's survive. That is what 
 `Scoped` service lifetime — there isn't one, deliberately.
 
 ```csharp
-var windowScope = Lifetime.Define(context.Lifetime, "window");
+var windowScope = context.Lifetime.DefineNested("window");
 var wb = Context.CreateBuilder(windowScope, parent: context);
 wb.Services.AddInstance(model);
 var windowContext = await wb.BuildAsync();   // completes synchronously: nothing here is async
