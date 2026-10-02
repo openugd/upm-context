@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] - 2026-07-29
 
 First release. The version starts at 2.0.0 because the whole OpenUGD family moved to a synchronized
-major version together — any 2.x package works with any other 2.x package.
+major version together. Minor and patch versions are independent: a 2.x package works with the 2.x
+versions of its dependencies at or above the minimums in its `package.json`.
 
 This package replaces the context layer of `com.openugd.corelib` and the whole of
 `com.openugd.dependency.injection`, which is being deprecated.
