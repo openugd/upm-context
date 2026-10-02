@@ -30,7 +30,10 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
   read as "this constructor is optional"). Constructor parameters need no equivalent: a second, narrower
   constructor already expresses it, because the greediest *satisfiable* constructor wins.
 - Two opt-in async boot phases, `IAwakeService` and `IInitializeService`. Services enrol automatically;
-  `InitializerCollection` exists only for boot steps that are not services.
+  `InitializerCollection` exists only for boot steps that are not services. Within a phase the boot runs
+  by dependency rank and, within a rank, one step at a time in registration order
+  (`StartupMode.Sequential`, the default). `StartupMode.Parallel` runs the steps of a rank concurrently
+  and is opt-in.
 - Child contexts: `Context.CreateBuilder(lifetime, parent)`. A child sees the parent's registrations,
   shadows what it re-registers, and its singletons die with its own `Lifetime`. A parent-registered
   singleton is always built and cached in the parent, even when first requested through a child.
@@ -65,8 +68,9 @@ Read this section if you are migrating from `ContextStartup` / `Service` / `Inje
 - **The greediest satisfiable constructor wins**, following .NET Core. The old `TypeProvider` seeded
   `maxParameters = int.MaxValue` and silently took the constructor with the *fewest* parameters, so
   adding a convenience `public Foo() {}` disabled injection for that type.
-- **Boot order follows dependency rank, not registration order.** Previously a service could be
-  awakened before something it depends on.
+- **Boot order follows dependency rank, then registration order.** Previously a service could be
+  awakened before something it depends on. Within a rank, steps run one at a time in registration order
+  unless you opt into `StartupMode.Parallel`.
 - **No `Transient` and no `Scoped` service lifetimes.** `Instantiate` covers "give me a fresh one" and
   hands ownership to the caller; a child context on a shorter `Lifetime` covers "a narrower scope".
   Note that .NET Core tracks disposable transients in the provider, which is a well-known leak source;
@@ -85,6 +89,11 @@ these changes.
   it can no longer be applied. Migration: a registered type needs nothing (see *Added*); otherwise put
   `[Inject]` on the constructor the container calls, or use `UnityEngine.Scripting.Preserve` for anything
   else.
+- **Breaking: `StartupMode.Sequential` is the default**, permanently; it was `Parallel`. Migration: set
+  `builder.Initializers.Mode = StartupMode.Parallel` where same-rank boot steps should overlap.
+- **Breaking: `StartupMode` is renumbered** to `Sequential = 0`, `Parallel = 1`, so `default(StartupMode)`
+  is the default mode. Migration: re-save any serialized `StartupMode` value; code that names the members
+  needs nothing.
 - **Breaking: `Context.Dispose` rethrows a single failure as itself.** When exactly one service throws
   while the context is disposed, that exception is rethrown with its original stack trace instead of
   being wrapped in an `AggregateException`; two or more still arrive as one `AggregateException`. This

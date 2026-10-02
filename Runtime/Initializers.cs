@@ -19,13 +19,18 @@ namespace OpenUGD
     /// rather than merely to exist.
     /// </para>
     /// <para>
-    /// <b>Order within a phase is dependency rank, not registration order.</b> Rank is the longest path
-    /// from a service down to a leaf, counting what a constructor takes as a parameter and what a
+    /// <b>Order within a phase is dependency rank first, then registration order.</b> Rank is the longest
+    /// path from a service down to a leaf, counting what a constructor takes as a parameter and what a
     /// registration factory resolves while it runs, so everything a service is built out of has finished
-    /// the phase before that service starts it. An <c>[Inject]</c> member is not counted — it is assigned
-    /// after every constructor has returned, so a service may well boot before the collaborator it holds
-    /// through one. Steps added to an <see cref="InitializerCollection" /> are outside the dependency graph
-    /// and run ahead of every service in their phase.
+    /// the phase before that service starts it. Services of the same rank run one at a time in the order
+    /// they were registered, under the default <see cref="StartupMode.Sequential" />.
+    /// </para>
+    /// <para>
+    /// An <c>[Inject]</c> member is not counted in the rank — it is assigned after every constructor has
+    /// returned — so a service may boot before the collaborator it holds through one. When the two share a
+    /// rank, registering the collaborator first makes it boot first; across ranks, rank decides. Steps added
+    /// to an <see cref="InitializerCollection" /> are outside the dependency graph and run ahead of every
+    /// service in their phase, in the order they were added.
     /// </para>
     /// <para>
     /// <b>A phase that throws fails the build.</b> Everything constructed so far is disposed in reverse
@@ -63,22 +68,29 @@ namespace OpenUGD
     /// <remarks>
     /// Chosen through <see cref="InitializerCollection.Mode" />, read once when
     /// <see cref="ContextBuilder.BuildAsync" /> reaches the boot, and applied to both phases alike.
+    /// <see cref="Sequential" /> is the default, and <c>default(StartupMode)</c> is
+    /// <see cref="Sequential" /> too.
     /// </remarks>
     public enum StartupMode
     {
         /// <summary>
-        /// The default. Steps of one rank start together and the rank ends when the last of them finishes.
-        /// Every task in a rank is awaited even after one has already faulted, so teardown never runs while
-        /// a boot step is still touching the objects it is about to dispose.
+        /// The default. One step at a time: rank by rank, and within a rank in the order the steps were
+        /// collected — registration order for services, and the order they were added for the steps of an
+        /// <see cref="InitializerCollection" />, which share the rank ahead of every service. The boot is
+        /// deterministic, a failure stops it at the step that failed, and registration order is a lever
+        /// that works when a step depends on something its rank does not show, such as a collaborator held
+        /// through an <c>[Inject]</c> member.
         /// </summary>
-        Parallel,
+        Sequential = 0,
 
         /// <summary>
-        /// One step at a time: rank by rank, and within a rank in the order the steps were collected, which
-        /// for services is registration order. Slower, but it makes a boot log reproducible and is what to
-        /// reach for when a step turns out to be less independent than its declared dependencies claim.
+        /// Opt-in. Steps of one rank start together and the rank ends when the last of them finishes.
+        /// Every task in a rank is awaited even after one has already faulted, so teardown never runs while
+        /// a boot step is still touching the objects it is about to dispose. On Unity's main thread this
+        /// interleaves steps rather than running them on other threads, so it saves time only when steps
+        /// await I/O, and it gives up the deterministic order.
         /// </summary>
-        Sequential
+        Parallel = 1
     }
 
     /// <summary>
@@ -149,9 +161,10 @@ namespace OpenUGD
     /// <para>
     /// <b>Order.</b> Every step added here runs before every service of the same phase: these are
     /// infrastructure that phase may rely on, and they have no place in the dependency graph to be ranked
-    /// by. Among themselves they share the one rank, so they are started in the order they were added but
-    /// run concurrently under <see cref="StartupMode.Parallel" />; only <see cref="StartupMode.Sequential" />
-    /// makes each of them finish before the next begins.
+    /// by. Among themselves they share the one rank, so under the default
+    /// <see cref="StartupMode.Sequential" /> each finishes before the next begins, in the order they were
+    /// added; under <see cref="StartupMode.Parallel" /> they are started in that order and run
+    /// concurrently.
     /// </para>
     /// <para>
     /// <b>Lifetime.</b> The collection belongs to one builder and is sealed the moment that builder starts
@@ -178,12 +191,13 @@ namespace OpenUGD
         private bool _sealed;
 
         /// <summary>
-        /// Whether steps sharing a dependency rank run concurrently or one at a time. Defaults to
-        /// <see cref="StartupMode.Parallel" /> and governs both phases, services and explicit steps
-        /// alike. Read once, when <see cref="ContextBuilder.BuildAsync" /> reaches the boot; setting it
+        /// Whether steps sharing a dependency rank run one at a time or concurrently. Defaults to
+        /// <see cref="StartupMode.Sequential" />, so within a rank the boot order is the registration order;
+        /// <see cref="StartupMode.Parallel" /> is the opt-in. Governs both phases, services and explicit
+        /// steps alike. Read once, when <see cref="ContextBuilder.BuildAsync" /> reaches the boot; setting it
         /// after that changes nothing, and a builder never boots twice.
         /// </summary>
-        public StartupMode Mode { get; set; } = StartupMode.Parallel;
+        public StartupMode Mode { get; set; } = StartupMode.Sequential;
 
         /// <summary>
         /// Appends a boot step to <paramref name="phase" />, to run ahead of that phase's services.

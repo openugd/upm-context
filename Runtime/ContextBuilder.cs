@@ -13,9 +13,9 @@ namespace OpenUGD
     /// <para>
     /// <b>Two things to fill in and one to call.</b> <see cref="Services" /> holds the registrations,
     /// <see cref="Initializers" /> the boot steps that belong to no service; then
-    /// <see cref="BuildAsync" />. Registration order never affects correctness — a constructor dependency
-    /// is always constructed and booted before whatever needs it — so a composition root can be written in
-    /// whatever order reads best.
+    /// <see cref="BuildAsync" />. Registration order does not matter for constructor dependencies — one is
+    /// always constructed and booted before whatever takes it — and otherwise decides only the order in
+    /// which services of the same dependency rank boot (see <see cref="BootPhase" />).
     /// </para>
     /// <para>
     /// <b>Nothing is validated until you build.</b> Adding a registration only records it. The whole graph

@@ -4,8 +4,8 @@ A composition root for Unity — **a library, not a framework**.
 
 You describe singletons on a builder. `BuildAsync` validates the whole graph *before* constructing
 anything, reports every problem at once with the file and line of each registration, constructs in
-dependency order, runs an `Awake → Initialize` boot ordered by dependency rank, and then
-either hands you a fully built `Context` or disposes everything it made and rethrows.
+dependency order, runs an `Awake → Initialize` boot ordered by dependency rank and then by registration
+order, and either hands you a fully built `Context` or disposes everything it made and rethrows.
 
 Scopes are [`Lifetime`](https://github.com/openugd/upm-lifetime)s. There is no `UnityEngine` reference,
 so the whole thing runs in a plain NUnit test, a console app, or a headless server build.
@@ -131,6 +131,20 @@ windowScope.Terminate();                     // only the window's own singletons
 For a one-off object that is *not* registered and *not* owned by the container, use
 `context.Instantiate<T>()` — constructor-injected, and yours to dispose.
 
+## Boot order
+
+`BuildAsync` awaits `AwakeAsync` on every service that implements `IAwakeService`, then
+`InitializeAsync` on every `IInitializeService`. Within each phase a service starts only after everything
+it takes in its constructor, or resolves in its factory, has finished that phase. Services of the same
+dependency rank run one at a time, **in registration order**.
+
+An `[Inject]` member does not count towards rank. If a service needs a collaborator it holds through a
+member to have booted first, and the two share a rank, register the collaborator first.
+
+`builder.Initializers.Mode = StartupMode.Parallel` runs the steps of one rank concurrently instead. On
+Unity's main thread that interleaves them rather than using other threads, so it only saves time when
+steps await I/O, and the order is no longer deterministic.
+
 ## Optional dependencies
 
 A missing binding is an error. That is the point of the container, and it is why the 1.x injector —
@@ -190,7 +204,7 @@ silent and nothing is reflective about it.
 | `ContextBuilder` | `Services`, `Initializers`, `BuildAsync`. |
 | `ServiceCollection` | `Add(Type, factory)`, `Contains`. Everything else is an extension. |
 | `Registration` | What `Add` returns. `As(Type)` adds a contract. A struct — no allocation. |
-| `InitializerCollection` | Boot steps that are not services. `Mode` picks Parallel or Sequential. |
+| `InitializerCollection` | Boot steps that are not services. `Mode` is Sequential by default; Parallel is opt-in. |
 | `IAwakeService`, `IInitializeService` | Opt-in async boot phases. Services enrol automatically. |
 | `ContextException` | The one exception the container throws. `Path` carries the dependency chain. |
 | `[Inject]` | Field/property injection, for objects the container did not construct. |

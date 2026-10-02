@@ -991,11 +991,49 @@ namespace OpenUGD.Tests
         }
 
         [Test]
-        public void ParallelIsTheDefaultStartupMode()
+        public void SequentialIsTheDefaultStartupMode()
         {
             var builder = NewBuilder();
 
-            Assert.AreEqual(StartupMode.Parallel, builder.Initializers.Mode);
+            Assert.AreEqual(StartupMode.Sequential, builder.Initializers.Mode);
+            Assert.AreEqual(StartupMode.Sequential, default(StartupMode),
+                "default(StartupMode) must be the default mode too, so a zero-initialised setting means it.");
+        }
+
+        [Test]
+        public void WithinARankTheDefaultBootOrderIsRegistrationOrder()
+        {
+            var bFirst = new BootLog();
+            var builder = NewBuilder("b-first");
+            builder.Services.AddInstance(bFirst);
+            builder.Services.Add<OrderedB>();
+            builder.Services.Add<OrderedA>();
+            Build(builder);
+
+            var aFirst = new BootLog();
+            builder = NewBuilder("a-first");
+            builder.Services.AddInstance(aFirst);
+            builder.Services.Add<OrderedA>();
+            builder.Services.Add<OrderedB>();
+            Build(builder);
+
+            CollectionAssert.AreEqual(new[] { "b:enter", "b:exit", "a:enter", "a:exit" }, bFirst.Entries);
+            CollectionAssert.AreEqual(new[] { "a:enter", "a:exit", "b:enter", "b:exit" }, aFirst.Entries);
+        }
+
+        [Test]
+        public void ACollaboratorHeldThroughAMemberHasBootedWhenRegisteredFirstInTheSameRank()
+        {
+            // A member is not a rank edge, so only registration order puts the collaborator first - which
+            // works because the default mode runs a rank one step at a time. Under Parallel the holder would
+            // start while the collaborator is still awaiting.
+            var builder = NewBuilder();
+            builder.Services.Add<LateReady>();
+            builder.Services.Add<HoldsLateReady>();
+
+            var context = Build(builder);
+
+            Assert.IsTrue(context.Resolve<HoldsLateReady>().SawReady);
         }
 
         [Test]
@@ -1497,6 +1535,55 @@ namespace OpenUGD.Tests
                 await Task.Yield();
 
                 lock (_sync) _current--;
+            }
+        }
+
+        public sealed class OrderedA : IAwakeService
+        {
+            private readonly BootLog _log;
+            public OrderedA(BootLog log) { _log = log; }
+
+            public async Task AwakeAsync(CancellationToken ct)
+            {
+                _log.Add("a:enter");
+                await Task.Delay(20, ct); // long enough that an overlapping step would start meanwhile
+                _log.Add("a:exit");
+            }
+        }
+
+        public sealed class OrderedB : IAwakeService
+        {
+            private readonly BootLog _log;
+            public OrderedB(BootLog log) { _log = log; }
+
+            public async Task AwakeAsync(CancellationToken ct)
+            {
+                _log.Add("b:enter");
+                await Task.Delay(20, ct); // long enough that an overlapping step would start meanwhile
+                _log.Add("b:exit");
+            }
+        }
+
+        public sealed class LateReady : IAwakeService
+        {
+            public volatile bool Ready;
+
+            public async Task AwakeAsync(CancellationToken ct)
+            {
+                await Task.Delay(20, ct);
+                Ready = true;
+            }
+        }
+
+        public sealed class HoldsLateReady : IAwakeService
+        {
+            [Inject] public LateReady Collaborator;
+            public bool SawReady;
+
+            public Task AwakeAsync(CancellationToken ct)
+            {
+                SawReady = Collaborator.Ready;
+                return Task.CompletedTask;
             }
         }
 
