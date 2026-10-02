@@ -5,7 +5,7 @@ namespace OpenUGD
 {
     /// <summary>
     /// A container operation failed: a service graph that could not be built, a contract that could not be
-    /// resolved, a type that could not be activated, a configuration value that could not be bound.
+    /// resolved, a type that could not be activated, a boot step that threw.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -48,7 +48,7 @@ namespace OpenUGD
         /// registration site or boot phase where there is one.
         /// </param>
         /// <param name="innerException">
-        /// The original exception — what a constructor, a boot step or a configuration conversion threw.
+        /// The original exception — what a constructor or a boot step threw.
         /// The container never swallows it; this is where it stays. A registration factory is the one
         /// thing not wrapped this way: what it throws leaves the build exactly as it was thrown.
         /// </param>

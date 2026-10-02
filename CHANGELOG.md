@@ -17,7 +17,7 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
 
 - `Context` — the built container: `TryResolve`, `Instantiate`, `Inject`, `Dispose`, plus `Lifetime`
   and `Parent`. Everything else is an extension method.
-- `ContextBuilder` with `Services`, `Configuration`, `Initializers` and a single `BuildAsync`.
+- `ContextBuilder` with `Services`, `Initializers` and a single `BuildAsync`.
 - `ServiceCollection.Add(Type, factory)` returning a `Registration` struct whose `As(contract)` adds a
   contract without replacing the self-registration, so `Add<A>().As<I1>().As<I2>()` leaves `A`, `I1`
   and `I2` all resolvable.
@@ -31,14 +31,11 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
   constructor already expresses it, because the greediest *satisfiable* constructor wins.
 - Two opt-in async boot phases, `IAwakeService` and `IInitializeService`. Services enrol automatically;
   `InitializerCollection` exists only for boot steps that are not services.
-- `ConfigurationManager`, a `string → string` configuration readable during registration, with
-  `AddJson`, `AddObject` and `AddDictionary` providers and `Get<T>` / `Bind` for typed access. It is
-  registered into the container, so a service can take `IConfiguration` as a constructor parameter.
 - Child contexts: `Context.CreateBuilder(lifetime, parent)`. A child sees the parent's registrations,
   shadows what it re-registers, and its singletons die with its own `Lifetime`. A parent-registered
   singleton is always built and cached in the parent, even when first requested through a child.
 - `ContextException` carrying the dependency `Path`.
-- `[Preserve]`, matched by Unity's linker by name, and a `link.xml`.
+- `[Preserve]`, matched by Unity's linker by name.
 
 ### Behaviour that differs from the layer this replaces
 
@@ -68,7 +65,8 @@ Read this section if you are migrating from `ContextStartup` / `Service` / `Inje
   Note that .NET Core tracks disposable transients in the provider, which is a well-known leak source;
   this package deliberately does not.
 - **`ContextServiceBuilderOptions`, a `Dictionary<string, object>` with one typed property, is gone.**
-  Configuration is `string → string` with typed binding on top.
+  A setting is an object — a `ScriptableObject` or any plain object — registered with `AddInstance` and
+  taken as an ordinary constructor parameter. The container has no configuration system of its own.
 
 ### Known limitations
 

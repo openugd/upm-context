@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 namespace OpenUGD
 {
     /// <summary>
-    /// The three ordered stages of the async boot that <see cref="ContextBuilder.BuildAsync" /> runs once
-    /// every service exists. Every step of one phase completes before the first step of the next begins.
+    /// The two ordered stages of the async boot that <see cref="ContextBuilder.BuildAsync" /> runs once
+    /// every service exists. Every step of <see cref="Awake" /> completes before the first step of
+    /// <see cref="Initialize" /> begins.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -36,18 +37,14 @@ namespace OpenUGD
     public enum BootPhase
     {
         /// <summary>
-        /// Runs first, and is what <see cref="IAwakeService" /> enrols in. For the work every later phase is
-        /// entitled to assume is done — loading a save, opening a connection, restoring state.
+        /// Runs first, and is what <see cref="IAwakeService" /> enrols in. For the work the
+        /// <see cref="Initialize" /> phase is entitled to assume is done — loading a save, opening a
+        /// connection, restoring state.
         /// </summary>
         Awake = 0,
 
-        /// <summary>
-        /// Runs between <see cref="Awake" /> and <see cref="Initialize" />. Nothing enrols here
-        /// automatically: it is reachable only through <see cref="InitializerCollection.Add" /> or an
-        /// <see cref="IContextInitializer" /> that names it, and exists for the wiring step that needs every
-        /// awake to have finished but must itself happen before anything initialises.
-        /// </summary>
-        Configure = 1,
+        // 1 is deliberately unassigned, so that a phase between these two could be added later without
+        // renumbering Initialize.
 
         /// <summary>
         /// Runs last, and is what <see cref="IInitializeService" /> enrols in. Nothing else in the boot runs
@@ -65,7 +62,7 @@ namespace OpenUGD
     /// </summary>
     /// <remarks>
     /// Chosen through <see cref="InitializerCollection.Mode" />, read once when
-    /// <see cref="ContextBuilder.BuildAsync" /> reaches the boot, and applied to all three phases alike.
+    /// <see cref="ContextBuilder.BuildAsync" /> reaches the boot, and applied to both phases alike.
     /// </remarks>
     public enum StartupMode
     {
@@ -126,8 +123,7 @@ namespace OpenUGD
     {
         /// <summary>
         /// Awaited during <see cref="BootPhase.Initialize" />, after the whole <see cref="BootPhase.Awake" />
-        /// and <see cref="BootPhase.Configure" /> phases and after every service of a lower dependency rank
-        /// in this phase. Called at most once.
+        /// phase and after every service of a lower dependency rank in this phase. Called at most once.
         /// </summary>
         /// <param name="cancellationToken">
         /// Cancelled when the context's <see cref="OpenUGD.Lifetime" /> terminates or when the token passed
@@ -141,54 +137,14 @@ namespace OpenUGD
     }
 
     /// <summary>
-    /// Opt-in enrolment in a phase the service chooses for itself. The only route a service has into
-    /// <see cref="BootPhase.Configure" />, and the only boot hook on a service that is handed the
-    /// <see cref="Context" />.
-    /// </summary>
-    /// <remarks>
-    /// Prefer <see cref="IAwakeService" /> or <see cref="IInitializeService" />: they name their phase in
-    /// their own name, and a reader does not have to look up a property to know when the code runs. This
-    /// interface earns its place when the phase genuinely depends on how the service was configured, or when
-    /// the step has to resolve something it deliberately did not take as a constructor parameter.
-    /// </remarks>
-    public interface IContextInitializer
-    {
-        /// <summary>
-        /// Which phase to enrol in. Read once, during <see cref="ContextBuilder.BuildAsync" /> and after the
-        /// instance is fully constructed and injected — so it may depend on configuration — and never read
-        /// again, so changing it later moves nothing.
-        /// </summary>
-        BootPhase Phase { get; }
-
-        /// <summary>
-        /// Awaited during the phase named by <see cref="Phase" />, after every step of a lower dependency
-        /// rank in that phase. Called at most once.
-        /// </summary>
-        /// <param name="context">
-        /// The context being built: every service is constructed, injected and resolvable through it, but
-        /// it has not yet been handed to whoever called <see cref="ContextBuilder.BuildAsync" /> and is
-        /// still torn down whole if a later step fails.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// Cancelled when the context's <see cref="OpenUGD.Lifetime" /> terminates or when the token passed
-        /// to <see cref="ContextBuilder.BuildAsync" /> is cancelled.
-        /// </param>
-        /// <returns>
-        /// A task that completes when the step is done; <c>null</c> counts as completed. Throwing, or
-        /// returning a faulted task, fails the build and disposes everything already constructed.
-        /// </returns>
-        Task InitializeAsync(Context context, CancellationToken cancellationToken);
-    }
-
-    /// <summary>
     /// The boot steps of a <see cref="ContextBuilder" /> that are not services: a lambda that has to run at
     /// a known point in the boot but has no object to belong to.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Services do not belong here.</b> <see cref="IAwakeService" />, <see cref="IInitializeService" />
-    /// and <see cref="IContextInitializer" /> enrol on their own, which keeps the statement of when a
-    /// service runs next to the code that runs, rather than at the composition root where it drifts.
+    /// <b>Services do not belong here.</b> <see cref="IAwakeService" /> and <see cref="IInitializeService" />
+    /// enrol on their own, which keeps the statement of when a service runs next to the code that runs,
+    /// rather than at the composition root where it drifts.
     /// </para>
     /// <para>
     /// <b>Order.</b> Every step added here runs before every service of the same phase: these are
@@ -223,7 +179,7 @@ namespace OpenUGD
 
         /// <summary>
         /// Whether steps sharing a dependency rank run concurrently or one at a time. Defaults to
-        /// <see cref="StartupMode.Parallel" /> and governs all three phases, services and explicit steps
+        /// <see cref="StartupMode.Parallel" /> and governs both phases, services and explicit steps
         /// alike. Read once, when <see cref="ContextBuilder.BuildAsync" /> reaches the boot; setting it
         /// after that changes nothing, and a builder never boots twice.
         /// </summary>
@@ -232,7 +188,7 @@ namespace OpenUGD
         /// <summary>
         /// Appends a boot step to <paramref name="phase" />, to run ahead of that phase's services.
         /// </summary>
-        /// <param name="phase">Which of the three stages of the boot the step belongs to.</param>
+        /// <param name="phase">Which of the two stages of the boot the step belongs to.</param>
         /// <param name="step">
         /// The work to do. It is handed the context being built — fully constructed and resolvable, but not
         /// yet returned to the caller — and a token cancelled when the context's

@@ -63,8 +63,8 @@ namespace OpenUGD
         /// <remarks>
         /// <para>
         /// For everything a constructor cannot express: a type from another assembly, a
-        /// <c>MonoBehaviour</c> pulled out of the scene, a choice between two implementations made from
-        /// configuration.
+        /// <c>MonoBehaviour</c> pulled out of the scene, a choice between two implementations made from a
+        /// setting.
         /// </para>
         /// <para>
         /// The <see cref="Context"/> handed to the factory is the one being built, and resolving from it is

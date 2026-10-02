@@ -11,8 +11,7 @@ namespace OpenUGD
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Three things to fill in and one to call.</b> <see cref="Services" /> holds the registrations,
-    /// <see cref="Configuration" /> the settings they may read while being described,
+    /// <b>Two things to fill in and one to call.</b> <see cref="Services" /> holds the registrations,
     /// <see cref="Initializers" /> the boot steps that belong to no service; then
     /// <see cref="BuildAsync" />. Registration order never affects correctness — a constructor dependency
     /// is always constructed and booted before whatever needs it — so a composition root can be written in
@@ -49,17 +48,7 @@ namespace OpenUGD
             _parent = parent;
 
             Services = new ServiceCollection(parent);
-            Configuration = new ConfigurationManager();
             Initializers = new InitializerCollection();
-
-            object inherited;
-            if (parent != null && parent.TryResolve(typeof(IConfiguration), out inherited))
-            {
-                foreach (var pair in (IConfiguration)inherited)
-                {
-                    Configuration.SetProviderValue(pair.Key, pair.Value);
-                }
-            }
         }
 
         /// <summary>
@@ -91,18 +80,6 @@ namespace OpenUGD
         public ServiceCollection Services { get; }
 
         /// <summary>
-        /// The settings, readable and writable throughout registration, so a factory can branch on a value
-        /// while the graph is still being described.
-        /// </summary>
-        /// <remarks>
-        /// Registered into the context as <see cref="IConfiguration" /> unless the caller registers their
-        /// own, so a service can take one as a constructor parameter. A child builder starts with a copy of
-        /// the values its parent's configuration enumerates; the copy lands in the provider layer, so
-        /// anything set here shadows the inherited value rather than colliding with it.
-        /// </remarks>
-        public ConfigurationManager Configuration { get; }
-
-        /// <summary>
         /// The boot steps that are not services. Empty and usually left that way: a service opts into a
         /// phase by implementing <see cref="IAwakeService" /> or <see cref="IInitializeService" />, so this
         /// is only for work that has no object of its own to hang on.
@@ -115,7 +92,7 @@ namespace OpenUGD
         public InitializerCollection Initializers { get; }
 
         /// <summary>
-        /// Validates the graph, constructs everything in dependency order, runs the three boot phases, and
+        /// Validates the graph, constructs everything in dependency order, runs the two boot phases, and
         /// returns the finished container — or disposes everything it made and rethrows.
         /// </summary>
         /// <remarks>
@@ -195,7 +172,7 @@ namespace OpenUGD
                 token.ThrowIfCancellationRequested();
 
                 var plan = PlanBuilder.Build(this);
-                var context = plan.CreateContext(_definition, _parent, Configuration);
+                var context = plan.CreateContext(_definition, _parent);
 
                 plan.ConstructAll(context);
                 plan.InjectAll(context);

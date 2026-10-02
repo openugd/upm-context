@@ -33,10 +33,8 @@ namespace OpenUGD
 
         internal int ContextSlot = -1;
         internal int LifetimeSlot = -1;
-        internal int ConfigurationSlot = -1;
 
         private BootStep[] _awake = NoSteps;
-        private BootStep[] _configure = NoSteps;
         private BootStep[] _initialize = NoSteps;
 
         // Build-time only. 0 = untouched, 1 = under construction, 2 = done. Needed for the one case the
@@ -46,8 +44,7 @@ namespace OpenUGD
         private List<int> _stack;
         private int _current = -1;
 
-        internal Context CreateContext(Lifetime.Definition definition, Context parent,
-            ConfigurationManager configuration)
+        internal Context CreateContext(Lifetime.Definition definition, Context parent)
         {
             _state = new byte[Steps.Length];
             _stack = new List<int>();
@@ -56,7 +53,6 @@ namespace OpenUGD
 
             if (ContextSlot >= 0) Instances[ContextSlot] = context;
             if (LifetimeSlot >= 0) Instances[LifetimeSlot] = definition.Lifetime;
-            if (ConfigurationSlot >= 0) Instances[ConfigurationSlot] = configuration;
 
             return context;
         }
@@ -183,7 +179,6 @@ namespace OpenUGD
         internal void CollectBootSteps(InitializerCollection initializers)
         {
             List<BootStep> awake = null;
-            List<BootStep> configure = null;
             List<BootStep> initialize = null;
 
             // Explicit initializers first within their phase (rank -1): they are infrastructure the
@@ -192,7 +187,7 @@ namespace OpenUGD
             for (var i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
-                Add(ref awake, ref configure, ref initialize, entry.Phase,
+                Add(ref awake, ref initialize, entry.Phase,
                     new BootStep { Rank = -1, Name = entry.Name, Run = entry.Step });
             }
 
@@ -207,7 +202,7 @@ namespace OpenUGD
                 var awakeService = instance as IAwakeService;
                 if (awakeService != null)
                 {
-                    Add(ref awake, ref configure, ref initialize, BootPhase.Awake, new BootStep {
+                    Add(ref awake, ref initialize, BootPhase.Awake, new BootStep {
                         Rank = rank,
                         Name = name + ".AwakeAsync",
                         Run = (context, token) => awakeService.AwakeAsync(token)
@@ -217,34 +212,21 @@ namespace OpenUGD
                 var initializeService = instance as IInitializeService;
                 if (initializeService != null)
                 {
-                    Add(ref awake, ref configure, ref initialize, BootPhase.Initialize, new BootStep {
+                    Add(ref awake, ref initialize, BootPhase.Initialize, new BootStep {
                         Rank = rank,
                         Name = name + ".InitializeAsync",
                         Run = (context, token) => initializeService.InitializeAsync(token)
                     });
                 }
-
-                var contextInitializer = instance as IContextInitializer;
-                if (contextInitializer != null)
-                {
-                    var phase = contextInitializer.Phase;
-                    Add(ref awake, ref configure, ref initialize, phase, new BootStep {
-                        Rank = rank,
-                        Name = name + ".InitializeAsync (" + phase + ")",
-                        Run = contextInitializer.InitializeAsync
-                    });
-                }
             }
 
             _awake = Sort(awake);
-            _configure = Sort(configure);
             _initialize = Sort(initialize);
         }
 
         internal async Task RunPhasesAsync(Context context, StartupMode mode, CancellationToken token)
         {
             await RunPhaseAsync(_awake, BootPhase.Awake, context, mode, token);
-            await RunPhaseAsync(_configure, BootPhase.Configure, context, mode, token);
             await RunPhaseAsync(_initialize, BootPhase.Initialize, context, mode, token);
         }
 
@@ -301,21 +283,11 @@ namespace OpenUGD
             }
         }
 
-        private static void Add(ref List<BootStep> awake, ref List<BootStep> configure,
-            ref List<BootStep> initialize, BootPhase phase, BootStep step)
+        private static void Add(ref List<BootStep> awake, ref List<BootStep> initialize, BootPhase phase,
+            BootStep step)
         {
-            switch (phase)
-            {
-                case BootPhase.Awake:
-                    (awake ?? (awake = new List<BootStep>())).Add(step);
-                    break;
-                case BootPhase.Configure:
-                    (configure ?? (configure = new List<BootStep>())).Add(step);
-                    break;
-                default:
-                    (initialize ?? (initialize = new List<BootStep>())).Add(step);
-                    break;
-            }
+            if (phase == BootPhase.Awake) (awake ?? (awake = new List<BootStep>())).Add(step);
+            else (initialize ?? (initialize = new List<BootStep>())).Add(step);
         }
 
         private static BootStep[] Sort(List<BootStep> steps)

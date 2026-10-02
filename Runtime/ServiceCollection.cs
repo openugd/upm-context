@@ -143,9 +143,9 @@ namespace OpenUGD
         /// <para>
         /// Two blind spots, both deliberate. A claimed contract counts even if the implementation does not
         /// actually implement it — that is the build's job to report, not this method's. And
-        /// <see cref="Context"/>, <see cref="Lifetime"/> and <c>IConfiguration</c>, which every built context
-        /// supplies automatically, answer <c>false</c> in a root collection; a child collection sees them
-        /// through its parent.
+        /// <see cref="Context"/> and <see cref="Lifetime"/>, which every built context supplies
+        /// automatically, answer <c>false</c> in a root collection; a child collection sees them through its
+        /// parent.
         /// </para>
         /// </remarks>
         /// <param name="contract">The contract to look for. <c>null</c> is allowed and answers

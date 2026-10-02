@@ -848,182 +848,6 @@ namespace OpenUGD.Tests
                 "A context owns a scope NESTED in the one it was handed; it never ends the caller's.");
         }
 
-        // ===== configuration =====
-
-        [Test]
-        public void ConfigurationIsFullyReadableDuringRegistrationSoRegistrationsCanBranchOnIt()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["feature:tooltips"] = "on";
-
-            if (builder.Configuration["feature:tooltips"] == "on")
-            {
-                builder.Services.Add<TooltipsOn>().As<IFeature>();
-            }
-            else
-            {
-                builder.Services.Add<TooltipsOff>().As<IFeature>();
-            }
-
-            var context = Build(builder);
-
-            Assert.IsInstanceOf<TooltipsOn>(context.Resolve<IFeature>());
-        }
-
-        [Test]
-        public void TheConfigurationIndexerReturnsNullForAnAbsentKey()
-        {
-            var builder = NewBuilder();
-
-            Assert.IsNull(builder.Configuration["nothing:here"]);
-        }
-
-        [Test]
-        public void AnExplicitSetOverridesAnyProvider()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["db:host"] = "explicit";
-            builder.Configuration.AddDictionary(new Dictionary<string, string> {
-                { "db:host", "from-provider" },
-                { "db:port", "5432" },
-            });
-
-            Assert.AreEqual("explicit", builder.Configuration["db:host"]);
-            Assert.AreEqual("5432", builder.Configuration["db:port"]);
-        }
-
-        [Test]
-        public void TryGetReportsPresenceInsteadOfReturningNull()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["db:host"] = "localhost";
-            IConfiguration configuration = builder.Configuration;
-
-            string value;
-            Assert.IsTrue(configuration.TryGet("db:host", out value));
-            Assert.AreEqual("localhost", value);
-
-            string missing;
-            Assert.IsFalse(configuration.TryGet("db:nope", out missing));
-            Assert.IsNull(missing);
-        }
-
-        [Test]
-        public void GetSectionStripsThePrefix()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["db:host"] = "localhost";
-            builder.Configuration["db:port"] = "5432";
-            builder.Configuration["other:host"] = "elsewhere";
-
-            var section = ((IConfiguration)builder.Configuration).GetSection("db");
-
-            Assert.AreEqual("localhost", section["host"]);
-            Assert.AreEqual("5432", section["port"]);
-            Assert.IsNull(section["other:host"]);
-        }
-
-        [Test]
-        public void GetBindsASectionToANewTypedObject()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["db:host"] = "localhost";
-            builder.Configuration["db:port"] = "5432";
-
-            var options = ((IConfiguration)builder.Configuration).Get<DbOptions>("db");
-
-            Assert.AreEqual("localhost", options.Host);
-            Assert.AreEqual(5432, options.Port);
-        }
-
-        [Test]
-        public void BindFillsAnExistingObject()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["db:host"] = "localhost";
-
-            var options = new DbOptions { Port = 1234 };
-            ((IConfiguration)builder.Configuration).Bind("db", options);
-
-            Assert.AreEqual("localhost", options.Host);
-            Assert.AreEqual(1234, options.Port, "A key that is absent must leave the existing value alone.");
-        }
-
-        [Test]
-        public void ConfigurationEnumeratesItsKeyValuePairs()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["a"] = "1";
-            builder.Configuration["b"] = "2";
-
-            var pairs = ((IConfiguration)builder.Configuration).ToDictionary(p => p.Key, p => p.Value);
-
-            Assert.AreEqual("1", pairs["a"]);
-            Assert.AreEqual("2", pairs["b"]);
-        }
-
-        [Test]
-        public void IConfigurationIsRegisteredIntoTheContainerAutomatically()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["greeting"] = "hello";
-
-            var context = Build(builder);
-
-            var configuration = context.Resolve<IConfiguration>();
-            Assert.IsNotNull(configuration);
-            Assert.AreEqual("hello", configuration["greeting"]);
-        }
-
-        [Test]
-        public void AServiceCanTakeIConfigurationAsAConstructorParameter()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["greeting"] = "hello";
-            builder.Services.Add<ConfiguredService>();
-
-            var context = Build(builder);
-
-            Assert.AreEqual("hello", context.Resolve<ConfiguredService>().Greeting);
-        }
-
-        [Test]
-        public void AChildInheritsItsParentsConfigurationAndCanOverrideOneKey()
-        {
-            var parentBuilder = NewBuilder("parent");
-            parentBuilder.Configuration["db:host"] = "live";
-            parentBuilder.Configuration["db:port"] = "5432";
-            var parent = Build(parentBuilder);
-
-            var childBuilder = Context.CreateBuilder(lifetime: NewLifetime("child"), parent: parent);
-            childBuilder.Configuration["db:host"] = "local";
-            var child = Build(childBuilder);
-
-            Assert.AreEqual("local", child.Resolve<IConfiguration>()["db:host"]);
-            Assert.AreEqual("5432", child.Resolve<IConfiguration>()["db:port"]);
-            Assert.AreEqual("live", parent.Resolve<IConfiguration>()["db:host"]);
-        }
-
-        [Test]
-        public void AddJsonFlattensNestedObjectsAndArrays()
-        {
-            var builder = NewBuilder();
-            builder.Configuration.AddJson("{\"audio\":{\"volume\":0.8},\"servers\":[{\"host\":\"eu\"}]}");
-
-            Assert.AreEqual("0.8", builder.Configuration["Audio:Volume"]);
-            Assert.AreEqual("eu", builder.Configuration["servers:0:host"]);
-        }
-
-        [Test]
-        public void AddObjectFlattensAnExistingSettingsObject()
-        {
-            var builder = NewBuilder();
-            builder.Configuration.AddObject(new DbOptions { Host = "localhost", Port = 5432 }, "db");
-
-            Assert.AreEqual("localhost", builder.Configuration["db:host"]);
-            Assert.AreEqual("5432", builder.Configuration["db:port"]);
-        }
-
         // ===== the boot pipeline =====
 
         [Test]
@@ -1087,7 +911,7 @@ namespace OpenUGD.Tests
         }
 
         [Test]
-        public void EveryAwakeCompletesBeforeConfigureAndConfigureBeforeAnyInitialize()
+        public void EveryAwakeCompletesBeforeAnyInitialize()
         {
             var builder = NewBuilder();
             var log = new BootLog();
@@ -1095,15 +919,12 @@ namespace OpenUGD.Tests
             builder.Services.Add<RankTop>();
             builder.Services.Add<RankMid>();
             builder.Services.Add<RankLeaf>();
-            builder.Initializers.Add(BootPhase.Configure, (c, ct) => {
-                log.Add("configure");
-                return Task.CompletedTask;
-            }, "configure-step");
 
             Build(builder);
 
-            AssertRanBefore(log, "top:awake:exit", "configure");
-            AssertRanBefore(log, "configure", "leaf:initialize");
+            // The highest-ranked awake against the lowest-ranked initialize: the phase boundary, not rank
+            // order, is what puts one before the other.
+            AssertRanBefore(log, "top:awake:exit", "leaf:initialize");
         }
 
         [Test]
@@ -1151,21 +972,6 @@ namespace OpenUGD.Tests
             Build(builder);
 
             AssertRanBefore(log, "step:awake", "leaf:awake:enter");
-        }
-
-        [Test]
-        public void AServiceImplementingIContextInitializerRunsInThePhaseItDeclares()
-        {
-            var builder = NewBuilder();
-            var log = new BootLog();
-            builder.Services.AddInstance(log);
-            builder.Services.Add<RankLeaf>();
-            builder.Services.Add<ConfigurePhaseService>();
-
-            Build(builder);
-
-            AssertRanBefore(log, "leaf:awake:exit", "service-initializer:configure");
-            AssertRanBefore(log, "service-initializer:configure", "leaf:initialize");
         }
 
         [Test]
@@ -1401,7 +1207,6 @@ namespace OpenUGD.Tests
         public interface IBeta { }
         public interface ITag { }
         public interface IProbe { }
-        public interface IFeature { }
 
         public sealed class Alpha : IAlpha { }
         public sealed class OtherAlpha : IAlpha { }
@@ -1409,8 +1214,6 @@ namespace OpenUGD.Tests
         public sealed class TwoFaced : IAlpha, IBeta { }
         public sealed class ParentTag : ITag { }
         public sealed class ChildTag : ITag { }
-        public sealed class TooltipsOn : IFeature { }
-        public sealed class TooltipsOff : IFeature { }
 
         public sealed class AlphaHolder
         {
@@ -1503,18 +1306,6 @@ namespace OpenUGD.Tests
         public sealed class PongService
         {
             [Inject] public PingService Ping;
-        }
-
-        public sealed class ConfiguredService
-        {
-            public ConfiguredService(IConfiguration configuration) { Greeting = configuration["greeting"]; }
-            public string Greeting { get; }
-        }
-
-        public sealed class DbOptions
-        {
-            public string Host { get; set; }
-            public int Port { get; set; }
         }
 
         public class DisposableProbe : IProbe, IDisposable
@@ -1624,20 +1415,6 @@ namespace OpenUGD.Tests
             public Task AwakeAsync(CancellationToken ct)
             {
                 _log.Add("factory-top:awake");
-                return Task.CompletedTask;
-            }
-        }
-
-        public sealed class ConfigurePhaseService : IContextInitializer
-        {
-            private readonly BootLog _log;
-            public ConfigurePhaseService(BootLog log) { _log = log; }
-
-            public BootPhase Phase { get { return BootPhase.Configure; } }
-
-            public Task InitializeAsync(Context context, CancellationToken ct)
-            {
-                _log.Add("service-initializer:configure");
                 return Task.CompletedTask;
             }
         }

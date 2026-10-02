@@ -78,11 +78,10 @@ namespace OpenUGD
                     }
                 }
 
-                // The three services every graph may assume exist - unless the caller registered their
+                // The two services every graph may assume exist - unless the caller registered their
                 // own, which wins.
                 Automatic(typeof(Context));
                 Automatic(typeof(Lifetime));
-                Automatic(typeof(IConfiguration));
             }
 
             private void Claim(Type contract, int index)
@@ -394,8 +393,7 @@ namespace OpenUGD
                     plan.Map[contract] = next;
 
                     if (contract == typeof(Context)) plan.ContextSlot = next;
-                    else if (contract == typeof(Lifetime)) plan.LifetimeSlot = next;
-                    else plan.ConfigurationSlot = next;
+                    else plan.LifetimeSlot = next;
 
                     next++;
                 }

@@ -33,9 +33,6 @@ namespace OpenUGD
             if (_field != null) _field.SetValue(target, value);
             else _property.SetValue(target, value, null);
         }
-
-        internal object GetValue(object target) =>
-            _field != null ? _field.GetValue(target) : _property.GetValue(target, null);
     }
 
     internal static class Activation
@@ -44,8 +41,6 @@ namespace OpenUGD
         private static readonly Dictionary<Type, TypeMetadata> Cache = new Dictionary<Type, TypeMetadata>();
         private static readonly object[] NoArguments = new object[0];
         private static readonly Member[] NoMembers = new Member[0];
-
-        private static readonly Dictionary<Type, Member[]> BindCache = new Dictionary<Type, Member[]>();
 
         internal sealed class TypeMetadata
         {
@@ -76,38 +71,6 @@ namespace OpenUGD
             var metadata = GetMetadata(type);
             error = metadata.MemberError;
             return metadata.Members;
-        }
-
-        /// The public, writable fields and properties a configuration section can be bound onto.
-        internal static Member[] GetBindableMembers(Type type)
-        {
-            lock (Gate)
-            {
-                Member[] members;
-                if (BindCache.TryGetValue(type, out members)) return members;
-
-                List<Member> found = null;
-
-                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
-                for (var i = 0; i < fields.Length; i++)
-                {
-                    if (fields[i].IsInitOnly || fields[i].IsLiteral) continue;
-                    (found ?? (found = new List<Member>())).Add(new Member(fields[i], null));
-                }
-
-                var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
-                for (var i = 0; i < properties.Length; i++)
-                {
-                    var property = properties[i];
-                    if (property.GetIndexParameters().Length != 0) continue;
-                    if (property.GetGetMethod() == null || property.GetSetMethod() == null) continue;
-                    (found ?? (found = new List<Member>())).Add(new Member(null, property));
-                }
-
-                members = found == null ? NoMembers : found.ToArray();
-                BindCache[type] = members;
-                return members;
-            }
         }
 
         internal static string DescribeIfNotActivatable(Type type)

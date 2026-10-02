@@ -611,32 +611,6 @@ namespace OpenUGD.Tests
             Assert.AreEqual(0, new ContextException("x").Path.Count);
         }
 
-        // ===== configuration failures =====
-
-        [Test]
-        public void AConfigurationValueThatCannotBeConvertedNamesTheKeyAndTheValue()
-        {
-            var builder = NewBuilder();
-            builder.Configuration["db:port"] = "not-a-number";
-
-            var error = Assert.Throws<ContextException>(
-                () => ((IConfiguration)builder.Configuration).Get<DbOptions>("db"));
-
-            StringAssert.Contains("db:Port", error.Message);
-            StringAssert.Contains("not-a-number", error.Message);
-        }
-
-        [Test]
-        public void MalformedJsonIsReportedWithTheOffset()
-        {
-            var builder = NewBuilder();
-
-            var error = Assert.Throws<ContextException>(
-                () => builder.Configuration.AddJson("{\"a\": }"));
-
-            StringAssert.Contains("malformed", error.Message);
-        }
-
         // ===== package invariants =====
 
         [Test]
@@ -817,12 +791,6 @@ namespace OpenUGD.Tests
             {
                 throw new InvalidOperationException("awake failed");
             }
-        }
-
-        public sealed class DbOptions
-        {
-            public string Host { get; set; }
-            public int Port { get; set; }
         }
     }
 }

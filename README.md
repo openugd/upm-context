@@ -4,7 +4,7 @@ A composition root for Unity — **a library, not a framework**.
 
 You describe singletons on a builder. `BuildAsync` validates the whole graph *before* constructing
 anything, reports every problem at once with the file and line of each registration, constructs in
-dependency order, runs an `Awake → Configure → Initialize` boot ordered by dependency rank, and then
+dependency order, runs an `Awake → Initialize` boot ordered by dependency rank, and then
 either hands you a fully built `Context` or disposes everything it made and rethrows.
 
 Scopes are [`Lifetime`](https://github.com/openugd/upm-lifetime)s. There is no `UnityEngine` reference,
@@ -65,8 +65,6 @@ public sealed class Profile : IAwakeService
 var scope   = Lifetime.Eternal.DefineNested("app");
 var builder = Context.CreateBuilder(scope);
 
-builder.Configuration["Save:Slot"] = "0";
-
 builder.Services
     .Add<Clock>()                       // plain singleton
     .Add<SaveService>().As<ISave>()     // also resolvable as ISave
@@ -79,6 +77,41 @@ context.Resolve<Profile>();
 
 `As<T>()` *adds* a contract — `SaveService` stays resolvable as itself too. Chain as many as you like:
 `.Add<UIWindowService>().As<IUIWindowService>().As<IUIWindowsProvider>()`.
+
+## Settings
+
+The container has no configuration system of its own. A setting is an object: a `ScriptableObject`
+you edit in the Inspector, or any plain object, registered with `AddInstance` and taken as an ordinary
+constructor parameter.
+
+```csharp
+using OpenUGD;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Game/Save Settings")]
+public sealed class SaveSettings : ScriptableObject
+{
+    public int Slot;
+    public float AutosaveSeconds = 60f;
+}
+
+public sealed class Autosave
+{
+    private readonly SaveSettings _settings;
+    public Autosave(SaveSettings settings) => _settings = settings;
+}
+```
+
+```csharp
+[SerializeField] private SaveSettings _saveSettings;   // on the MonoBehaviour that builds the context
+
+builder.Services.AddInstance(_saveSettings);            // resolvable as SaveSettings
+builder.Services.Add<Autosave>();
+```
+
+You already hold the object while you register, so a registration can branch on its values.
+`AddInstance<ISaveSettings>(asset)` registers it under an interface instead of its own type. The context
+never disposes an instance it was handed: the asset stays yours.
 
 ## Scopes
 
@@ -105,6 +138,8 @@ which returned `null` — is gone. But some collaborators genuinely have a defin
 absent, and for those there is `Optional`:
 
 ```csharp
+using OpenUGD;
+
 public interface ILocalization
 {
     string Get(string key);
@@ -152,10 +187,9 @@ silent and nothing is reflective about it.
 | Type | What it is |
 | --- | --- |
 | `Context` | The built container. `TryResolve`, `Instantiate`, `Inject`, `Dispose`. |
-| `ContextBuilder` | `Services`, `Configuration`, `Initializers`, `BuildAsync`. |
+| `ContextBuilder` | `Services`, `Initializers`, `BuildAsync`. |
 | `ServiceCollection` | `Add(Type, factory)`, `Contains`. Everything else is an extension. |
 | `Registration` | What `Add` returns. `As(Type)` adds a contract. A struct — no allocation. |
-| `ConfigurationManager` | `string → string`, with `AddJson` / `AddObject` / `AddDictionary` providers. |
 | `InitializerCollection` | Boot steps that are not services. `Mode` picks Parallel or Sequential. |
 | `IAwakeService`, `IInitializeService` | Opt-in async boot phases. Services enrol automatically. |
 | `ContextException` | The one exception the container throws. `Path` carries the dependency chain. |
@@ -183,11 +217,17 @@ behind.
 
 ## Requirements
 
-Unity 2022.3 or newer (C# 9). Depends on `com.openugd.lifetime` 2.0.0.
+Unity 6000.0 or newer. Depends on `com.openugd.lifetime` 2.0.0.
 
-Services are activated by reflection, so if you strip managed code, mark your service types
-`[OpenUGD.Preserve]` or list them in your own `link.xml`. Services registered with a hand-written
-factory — `Add<T>(c => new T(c.Resolve<IDep>()))` — use no reflection and are always safe.
+Services are activated by reflection, so managed-code stripping can remove the constructors the
+container calls. The package ships no `link.xml`: Unity reads `link.xml` only from a project's `Assets`
+folder, never from a package. If you strip managed code:
+
+- register the service with a hand-written factory — `Add<T>(c => new T(c.Resolve<IDep>()))` — which
+  uses no reflection and is always safe;
+- or put `[OpenUGD.Preserve]` on the constructor the container calls. On the class it keeps only a
+  parameterless constructor;
+- or list your service types in a `link.xml` under your project's `Assets` folder.
 
 ## Licence
 
