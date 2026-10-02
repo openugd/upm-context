@@ -1,0 +1,36 @@
+{
+  "name": "com.openugd.context",
+  "displayName": "Context",
+  "version": "2.0.0",
+  "license": "Apache-2.0",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "author": {
+    "name": "Mykola Dorofii",
+    "email": "dorofiy.kolya@gmail.com",
+    "url": "https://github.com/openugd"
+  },
+  "description": "A composition root, not a framework. Describe singletons on a ContextBuilder; BuildAsync validates the entire graph before constructing anything, reports every problem at once with the file and line of each registration, constructs in dependency order, runs an Awake/Configure/Initialize boot ordered by dependency rank, and either returns a fully built Context or disposes everything it made and rethrows. Scoped by Lifetime, with no UnityEngine dependency: usable from a plain NUnit test, a console app, or a headless server build.",
+  "keywords": [
+    "di",
+    "dependency-injection",
+    "ioc",
+    "container",
+    "context",
+    "composition-root",
+    "service-collection",
+    "configuration",
+    "lifetime",
+    "bootstrap"
+  ],
+  "dependencies": {
+    "com.openugd.lifetime": "2.0.0"
+  },
+  "licensesUrl": "https://github.com/openugd/upm-context/blob/main/LICENSE.md",
+  "documentationUrl": "https://github.com/openugd/upm-context",
+  "changelogUrl": "https://github.com/openugd/upm-context/blob/main/CHANGELOG.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openugd/upm-context.git"
+  }
+}
