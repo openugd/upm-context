@@ -128,6 +128,20 @@ namespace OpenUGD
 
         internal static string Where(string site) => site == null ? string.Empty : "\n      registered at " + site;
 
+        /// Appended to "has no public instance constructor": in a player build that is as likely to mean the
+        /// linker removed the constructor as that the type never had one, and the two need different fixes.
+        internal static string StrippingHint(int constructorsFound) =>
+            (constructorsFound == 0
+                ? "\n      It has no instance constructor at all, which every class compiled from C# has, so " +
+                  "managed code stripping has removed them from this build."
+                : "\n      If its source declares a public constructor, managed code stripping has removed it " +
+                  "from this build.") +
+            " Unity's linker keeps the constructors of a type named at the call that registers or " +
+            "instantiates it - Add<T>(), TryAdd<TContract, T>(), Instantiate<T>(), Add(typeof(T)) - but not " +
+            "of a type passed on by a generic method of your own, or carried in a Type it cannot trace. Put " +
+            "[Inject] on the constructor the container should call; the com.openugd.context README has the " +
+            "details under \"Managed code stripping\".";
+
         private static int Distance(string a, string b)
         {
             if (a == b) return 0;

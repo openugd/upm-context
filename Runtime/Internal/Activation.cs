@@ -272,7 +272,8 @@ namespace OpenUGD
             {
                 throw new ContextException(
                     "Cannot instantiate '" + Diagnostics.Display(type) +
-                    "': it has no public instance constructor, and none is marked [Inject].");
+                    "': it has no public instance constructor, and none is marked [Inject]." +
+                    Diagnostics.StrippingHint(metadata.Constructors.Length));
             }
 
             string firstFailure = null;

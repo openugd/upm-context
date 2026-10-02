@@ -219,15 +219,76 @@ behind.
 
 Unity 6000.0 or newer. Depends on `com.openugd.lifetime` 2.0.0.
 
-Services are activated by reflection, so managed-code stripping can remove the constructors the
-container calls. The package ships no `link.xml`: Unity reads `link.xml` only from a project's `Assets`
-folder, never from a package. If you strip managed code:
+## Managed code stripping (IL2CPP)
 
-- register the service with a hand-written factory — `Add<T>(c => new T(c.Resolve<IDep>()))` — which
-  uses no reflection and is always safe;
-- or put `[OpenUGD.Preserve]` on the constructor the container calls. On the class it keeps only a
-  parameterless constructor;
-- or list your service types in a `link.xml` under your project's `Assets` folder.
+The container calls constructors and fills `[Inject]` members by reflection, which Unity's linker cannot
+follow by itself. The package tells the linker what to keep, so the ordinary ways of using it survive
+Medium and High stripping with no extra work:
+
+- **A type you register or instantiate by name keeps its constructors.** `Add<T>()`,
+  `TryAdd<TContract, T>()`, `.Add<T>()` on a registration, `Instantiate<T>()`, `Add(typeof(T))` and
+  `Instantiate(typeof(T))` ask the linker to keep `T`'s constructors, as long as `T` is written at that
+  call — a type argument or a `typeof`.
+- **`[Inject]` members are always kept**, together with the attribute the container looks for, so a class
+  with an `[Inject]` member is kept even when nothing uses it.
+- **A factory needs nothing.** `Add<T>(c => new T(c.Resolve<IDep>()))` calls the constructor in your
+  code, where the linker sees it.
+
+Two things break the chain:
+
+- **A generic method of your own.** When `Add<T>()` gets a type parameter of yours instead of a concrete
+  type, the linker cannot tell which types will pass through it, so it does not keep their constructors
+  for the container, and it logs warning IL2091 naming your method. Annotate that type parameter as the package annotates its
+  own, or put `[Inject]` on the constructor of every type that goes through the method. Unity's class
+  libraries do not include the annotation, so declare an `internal` copy of it once in your assembly; the
+  linker recognises it by its full name.
+- **A `Type` the linker cannot trace** — read from data, kept in a field, built from a string at run
+  time. Put `[Inject]` on the constructor, or list the type in a `link.xml` under your project's
+  `Assets` folder.
+
+```csharp
+using System.Diagnostics.CodeAnalysis;
+using OpenUGD;
+
+public static class GameInstallers
+{
+    // Passes Add<T>'s promise on: AddGameService<Shop>() keeps Shop's constructors, as Add<Shop>() would.
+    public static Registration AddGameService<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors |
+                                    DynamicallyAccessedMemberTypes.NonPublicConstructors)] T>(
+        this ServiceCollection services) where T : class =>
+        services.Add<T>();
+}
+
+// Once per assembly: Unity's class libraries lack this attribute, and the linker matches it by full name.
+namespace System.Diagnostics.CodeAnalysis
+{
+    [AttributeUsage(AttributeTargets.GenericParameter | AttributeTargets.Parameter |
+                    AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.ReturnValue)]
+    internal sealed class DynamicallyAccessedMembersAttribute : Attribute
+    {
+        public DynamicallyAccessedMembersAttribute(DynamicallyAccessedMemberTypes memberTypes) =>
+            MemberTypes = memberTypes;
+
+        public DynamicallyAccessedMemberTypes MemberTypes { get; }
+    }
+
+    [Flags]
+    internal enum DynamicallyAccessedMemberTypes
+    {
+        PublicParameterlessConstructor = 0x0001,
+        PublicConstructors = 0x0003,
+        NonPublicConstructors = 0x0004,
+    }
+}
+```
+
+**A class-level `[Preserve]` is not enough.** It keeps only the parameterless constructor, never the one
+the container calls. Put `[Inject]` on the constructor instead.
+
+The package ships no `link.xml`, because Unity reads `link.xml` only from a project's `Assets` folder,
+never from a package. If stripping does remove a constructor, the build reports that the type "has no
+public instance constructor" and names stripping as a possible cause.
 
 ## Licence
 

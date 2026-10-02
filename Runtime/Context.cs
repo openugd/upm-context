@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenUGD
 {
@@ -180,6 +181,13 @@ namespace OpenUGD
         /// <b>Cost.</b> Reflection, on every call. The per-type metadata is cached and the cache is locked,
         /// so this is safe to call concurrently, but it is not the thing to do in a hot loop.
         /// </para>
+        /// <para>
+        /// <b>Managed code stripping.</b> <paramref name="type"/> is annotated for Unity's linker, so
+        /// <c>Instantiate(typeof(X))</c> keeps <c>X</c>'s constructors in a stripped build. A
+        /// <see cref="Type"/> the linker cannot trace back to a <c>typeof</c> does not keep them: put
+        /// <see cref="InjectAttribute"/> on the constructor to call, or give the field or parameter that
+        /// carries the type the same annotation.
+        /// </para>
         /// </remarks>
         /// <param name="type">
         /// The concrete type to construct. Interfaces, abstract classes, value types, arrays and open
@@ -201,7 +209,8 @@ namespace OpenUGD
         /// constructor threw, in which case it is the <see cref="Exception.InnerException" />; or member
         /// injection failed, as for <see cref="Inject" />.
         /// </exception>
-        public object Instantiate(Type type, object[] args = null)
+        public object Instantiate([DynamicallyAccessedMembers(Trimming.Constructors)] Type type,
+            object[] args = null)
         {
             if (type == null) throw new ArgumentNullException(nameof(type));
             if (_lifetime.IsTerminated) throw Disposed();

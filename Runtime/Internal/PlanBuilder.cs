@@ -201,7 +201,7 @@ namespace OpenUGD
                     _errors.Add(
                         "'" + Diagnostics.Display(type) +
                         "' has no public instance constructor, and none is marked [Inject]." +
-                        Diagnostics.Where(entry.Site));
+                        Diagnostics.Where(entry.Site) + Diagnostics.StrippingHint(metadata.Constructors.Length));
                     return;
                 }
 

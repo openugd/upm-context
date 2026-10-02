@@ -35,7 +35,14 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
   shadows what it re-registers, and its singletons die with its own `Lifetime`. A parent-registered
   singleton is always built and cached in the parent, even when first requested through a child.
 - `ContextException` carrying the dependency `Path`.
-- `[Preserve]`, matched by Unity's linker by name.
+- Support for IL2CPP managed code stripping with no `link.xml`. `[Inject]` derives from a linker
+  `Preserve` attribute, so every `[Inject]` member survives with the attribute the container reads. The
+  entry points that hand a user type to the activator (`Add<T>()`, `TryAdd`, `Registration.Add<T>()`,
+  both `Instantiate<T>`, `ServiceCollection.Add(Type)` and `Context.Instantiate(Type)`) carry
+  `[DynamicallyAccessedMembers]`, so the constructors of every type written at those calls survive Medium
+  and High stripping. Checked by running the UnityLinker of 6000.0.41f1 and 6000.3.3f1 at both levels
+  and executing the stripped assemblies; no IL2CPP player was built. The "no public instance constructor"
+  error names stripping as a possible cause.
 
 ### Behaviour that differs from the layer this replaces
 
@@ -73,6 +80,11 @@ Read this section if you are migrating from `ContextStartup` / `Service` / `Inje
 Code written against an unreleased snapshot of this package, as the rest of the OpenUGD family was, needs
 these changes.
 
+- **Breaking: `OpenUGD.PreserveAttribute` is no longer public API.** It became
+  `OpenUGD.Internal.PreserveAttribute`, the abstract base of `[Inject]`, with a protected constructor, so
+  it can no longer be applied. Migration: a registered type needs nothing (see *Added*); otherwise put
+  `[Inject]` on the constructor the container calls, or use `UnityEngine.Scripting.Preserve` for anything
+  else.
 - **Breaking: `Context.Dispose` rethrows a single failure as itself.** When exactly one service throws
   while the context is disposed, that exception is rethrown with its original stack trace instead of
   being wrapped in an `AggregateException`; two or more still arrive as one `AggregateException`. This

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace OpenUGD
@@ -67,7 +68,8 @@ namespace OpenUGD
         /// <paramref name="registration"/> is <c>default(Registration)</c> and so names no collection, or
         /// the owning <see cref="ContextBuilder"/> has already built its <see cref="Context"/>.
         /// </exception>
-        public static Registration Add<TImpl>(this Registration registration,
+        public static Registration Add<[DynamicallyAccessedMembers(Trimming.Constructors)] TImpl>(
+            this Registration registration,
             [CallerFilePath] string file = null, [CallerLineNumber] int line = 0)
             where TImpl : class
         {

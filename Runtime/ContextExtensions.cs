@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenUGD
 {
@@ -133,7 +134,7 @@ namespace OpenUGD
         /// the original exception is the <see cref="Exception.InnerException"/>.
         /// </exception>
         /// <exception cref="ObjectDisposedException">The context has been disposed.</exception>
-        public static T Instantiate<T>(this Context context)
+        public static T Instantiate<[DynamicallyAccessedMembers(Trimming.Constructors)] T>(this Context context)
         {
             if (context == null) throw new ArgumentNullException(nameof(context));
             return (T)context.Instantiate(typeof(T), null);
@@ -181,7 +182,8 @@ namespace OpenUGD
         /// arguments and this context, or its constructor threw.
         /// </exception>
         /// <exception cref="ObjectDisposedException">The context has been disposed.</exception>
-        public static T Instantiate<T>(this Context context, params object[] args)
+        public static T Instantiate<[DynamicallyAccessedMembers(Trimming.Constructors)] T>(this Context context,
+            params object[] args)
         {
             if (context == null) throw new ArgumentNullException(nameof(context));
             return (T)context.Instantiate(typeof(T), args);

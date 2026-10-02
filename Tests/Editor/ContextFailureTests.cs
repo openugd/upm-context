@@ -358,6 +358,42 @@ namespace OpenUGD.Tests
         }
 
         [Test]
+        public void TheNoPublicConstructorErrorNamesStrippingAsAPossibleCause()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<PrivateConstructor>();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("managed code stripping", error.Message);
+            StringAssert.Contains("Put [Inject] on the constructor", error.Message);
+            Assert.Less(error.Message.IndexOf("registered at", StringComparison.Ordinal),
+                error.Message.IndexOf("managed code stripping", StringComparison.Ordinal),
+                "The registration site belongs to the problem line, before the advice.");
+        }
+
+        [Test]
+        public void InstantiateNamesStrippingWhenThereIsNoPublicConstructor()
+        {
+            var context = Build(NewBuilder());
+
+            var error = Assert.Throws<ContextException>(() => context.Instantiate<PrivateConstructor>());
+
+            StringAssert.Contains("no public instance constructor", error.Message);
+            StringAssert.Contains("managed code stripping", error.Message);
+        }
+
+        [Test]
+        public void ATypeLeftWithNoConstructorAtAllIsBlamedOnStripping()
+        {
+            // No C# class can be written without an instance constructor, so the case is only reachable in a
+            // stripped player; the wording is checked on the helper both error sites share.
+            StringAssert.Contains("no instance constructor at all", Diagnostics.StrippingHint(0));
+            StringAssert.Contains("has removed them", Diagnostics.StrippingHint(0));
+            StringAssert.Contains("If its source declares a public constructor", Diagnostics.StrippingHint(1));
+        }
+
+        [Test]
         public void TwoInjectMarkedConstructorsAreAValidationError()
         {
             var builder = NewBuilder();

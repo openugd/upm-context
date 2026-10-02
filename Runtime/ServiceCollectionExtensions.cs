@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace OpenUGD
@@ -9,9 +10,18 @@ namespace OpenUGD
     /// is registered already.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// These are the methods to reach for. <see cref="ServiceCollection.Add"/> itself is for types only
     /// known at run time. All of them capture the call site, so a build failure names the line the
     /// registration was written on.
+    /// </para>
+    /// <para>
+    /// <b>Managed code stripping.</b> The type parameter of every method here that has the container
+    /// construct the type is annotated for Unity's linker, so the constructors of a type written at the call
+    /// site — <c>Add&lt;SaveService&gt;()</c> — survive a stripped build with no further work. A generic
+    /// method of your own that forwards its type parameter here breaks that chain unless its own type
+    /// parameter carries the same annotation; see the package README.
+    /// </para>
     /// </remarks>
     public static class ServiceCollectionExtensions
     {
@@ -47,7 +57,8 @@ namespace OpenUGD
         /// <exception cref="ArgumentNullException"><paramref name="services"/> is <c>null</c>.</exception>
         /// <exception cref="InvalidOperationException">The owning builder has already built its
         /// context.</exception>
-        public static Registration Add<TImpl>(this ServiceCollection services,
+        public static Registration Add<[DynamicallyAccessedMembers(Trimming.Constructors)] TImpl>(
+            this ServiceCollection services,
             [CallerFilePath] string file = null, [CallerLineNumber] int line = 0)
             where TImpl : class
         {
@@ -104,7 +115,10 @@ namespace OpenUGD
         {
             if (services == null) throw new ArgumentNullException(nameof(services));
             if (factory == null) throw new ArgumentNullException(nameof(factory));
-            return services.Add(typeof(TImpl), factory, file, line);
+
+            // The factory constructs the instance in your code, where the linker can see the constructor,
+            // so nothing has to be kept for this registration: the unannotated path.
+            return services.AddEntry(typeof(TImpl), factory, file, line);
         }
 
         /// <summary>
@@ -195,7 +209,8 @@ namespace OpenUGD
         /// call that finds the contract already supplied returns <c>false</c> without touching the sealed
         /// collection.
         /// </exception>
-        public static bool TryAdd<TContract, TImpl>(this ServiceCollection services,
+        public static bool TryAdd<TContract, [DynamicallyAccessedMembers(Trimming.Constructors)] TImpl>(
+            this ServiceCollection services,
             [CallerFilePath] string file = null, [CallerLineNumber] int line = 0)
             where TImpl : class, TContract
         {

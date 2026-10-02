@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace OpenUGD
@@ -86,6 +87,13 @@ namespace OpenUGD
         /// <see cref="InjectAttribute"/> are filled after every service in the context has been constructed,
         /// which is why two services may hold each other through members but not through constructors.
         /// </para>
+        /// <para>
+        /// <b>Managed code stripping.</b> <paramref name="implementation"/> is annotated for Unity's linker,
+        /// so passing <c>typeof(X)</c> keeps <c>X</c>'s constructors in a stripped build. A
+        /// <see cref="Type"/> the linker cannot trace back to a <c>typeof</c> — read from data, or held in an
+        /// unannotated field — does not keep them: put <see cref="InjectAttribute"/> on the constructor the
+        /// container should call, or list the type in a <c>link.xml</c> under <c>Assets</c>.
+        /// </para>
         /// </remarks>
         /// <param name="implementation">
         /// The type to construct, and the registration's first contract. Not checked here: without a
@@ -113,10 +121,19 @@ namespace OpenUGD
         /// The owning <see cref="ContextBuilder"/> has already built its <see cref="Context"/>, so this
         /// registration could never take effect.
         /// </exception>
-        public Registration Add(Type implementation, Func<Context, object> factory = null,
+        public Registration Add([DynamicallyAccessedMembers(Trimming.Constructors)] Type implementation,
+            Func<Context, object> factory = null,
             [CallerFilePath] string file = null, [CallerLineNumber] int line = 0)
         {
             if (implementation == null) throw new ArgumentNullException(nameof(implementation));
+            return AddEntry(implementation, factory, file, line);
+        }
+
+        /// The unannotated path, for a registration whose type the container never constructs by reflection:
+        /// a factory registration needs no constructor kept, and routing it through the annotated Add above
+        /// would make the linker warn (IL2087) about a type argument it cannot vouch for.
+        internal Registration AddEntry(Type implementation, Func<Context, object> factory, string file, int line)
+        {
             ThrowIfSealed();
 
             var entry = new Entry { Implementation = implementation, Factory = factory, File = file, Line = line };
