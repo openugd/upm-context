@@ -252,7 +252,8 @@ Two things break the chain:
 
 - **A generic method of your own.** When `Add<T>()` gets a type parameter of yours instead of a concrete
   type, the linker cannot tell which types will pass through it, so it does not keep their constructors
-  for the container, and it logs warning IL2091 naming your method. Annotate that type parameter as the package annotates its
+  for the container. UnityLinker raises trim warning IL2091 naming your method, but the Editor may not
+  surface it, so do not rely on the warning. Annotate that type parameter as the package annotates its
   own, or put `[Inject]` on the constructor of every type that goes through the method. Unity's class
   libraries do not include the annotation, so declare an `internal` copy of it once in your assembly; the
   linker recognises it by its full name.
@@ -297,12 +298,15 @@ namespace System.Diagnostics.CodeAnalysis
 }
 ```
 
-**A class-level `[Preserve]` is not enough.** It keeps only the parameterless constructor, never the one
-the container calls. Put `[Inject]` on the constructor instead.
+**A class-level `[Preserve]` is not enough.** It keeps only the parameterless constructor, so a
+constructor that takes dependencies is still removed. Put `[Inject]` on that constructor instead.
 
 The package ships no `link.xml`, because Unity reads `link.xml` only from a project's `Assets` folder,
-never from a package. If stripping does remove a constructor, the build reports that the type "has no
-public instance constructor" and names stripping as a possible cause.
+never from a package. If stripping leaves a type with no public constructor at all, the build reports
+that it "has no public instance constructor" and names stripping as a possible cause. If stripping
+removes only some of them, no error names stripping: the container uses the greediest public constructor
+that is left and can be satisfied, which may not be the one you meant. So keep the constructors as
+described above rather than wait for the error.
 
 ## Licence
 

@@ -85,16 +85,15 @@ Read this section if you are migrating from `ContextStartup` / `Service` / `Inje
 Code written against an unreleased snapshot of this package, as the rest of the OpenUGD family was, needs
 these changes.
 
-- **Breaking: `OpenUGD.PreserveAttribute` is no longer public API.** It became
-  `OpenUGD.Internal.PreserveAttribute`, the abstract base of `[Inject]`, with a protected constructor, so
-  it can no longer be applied. Migration: a registered type needs nothing (see *Added*); otherwise put
-  `[Inject]` on the constructor the container calls, or use `UnityEngine.Scripting.Preserve` for anything
-  else.
+- **Breaking: `OpenUGD.PreserveAttribute` is gone.** Its replacement, `OpenUGD.Internal.PreserveAttribute`,
+  exists only as the abstract base of `[Inject]`; its constructor is protected, so it cannot be applied.
+  Migration: a registered type needs nothing (see *Added*); otherwise put `[Inject]` on the constructor
+  the container calls, or use `UnityEngine.Scripting.Preserve` for anything else.
 - **Breaking: `StartupMode.Sequential` is the default**, permanently; it was `Parallel`. Migration: set
   `builder.Initializers.Mode = StartupMode.Parallel` where same-rank boot steps should overlap.
 - **Breaking: `StartupMode` is renumbered** to `Sequential = 0`, `Parallel = 1`, so `default(StartupMode)`
-  is the default mode. Migration: re-save any serialized `StartupMode` value; code that names the members
-  needs nothing.
+  is the default mode. Migration: code that names the members needs nothing; a value stored as a number
+  (a serialized field, a saved setting) now means the other mode, so set it again after upgrading.
 - **Breaking: `Context.Dispose` rethrows a single failure as itself.** When exactly one service throws
   while the context is disposed, that exception is rethrown with its original stack trace instead of
   being wrapped in an `AggregateException`; two or more still arrive as one `AggregateException`. This
