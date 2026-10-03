@@ -52,6 +52,7 @@ namespace OpenUGD
             internal Func<Context, object> Factory;
             internal object Instance;
             internal readonly List<Type> Contracts = new List<Type>(1);
+            internal List<Type> Elements;
             internal string File;
             internal int Line;
 
@@ -213,6 +214,14 @@ namespace OpenUGD
             _contracts.Add(contract);
         }
 
+        internal void Contribute(int index, Type element)
+        {
+            ThrowIfSealed();
+            var entry = _entries[index];
+            if (entry.Elements == null) entry.Elements = new List<Type>(1);
+            if (!entry.Elements.Contains(element)) entry.Elements.Add(element);
+        }
+
         internal Entry EntryAt(int index) => _entries[index];
 
         internal Entry[] Snapshot() => _entries.ToArray();
@@ -317,6 +326,52 @@ namespace OpenUGD
             if (contract == null) throw new ArgumentNullException(nameof(contract));
 
             _services.Bind(_index, contract);
+            return this;
+        }
+
+        /// <summary>
+        /// Contributes this registration's instance to the collection of <paramref name="element"/>, which
+        /// is resolvable only as <c>IReadOnlyList&lt;element&gt;</c>: how several modules add to one thing —
+        /// debug panels, tickables, analytics sinks — without any of them knowing the others.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>It does not claim <paramref name="element"/>.</b> Resolving the element type itself stays "not
+        /// registered" unless something registers it with <see cref="As"/>, so a single-instance contract
+        /// is never made ambiguous by contributions.
+        /// </para>
+        /// <para>
+        /// <b>The list</b> holds the contributions of this context only, in registration order — a child's
+        /// list does not repeat its parent's — and is empty, not an error, when nothing contributes. It is
+        /// built once, after every element, so whatever takes the list is constructed and boots after
+        /// everything in it; an element that takes the list itself is a dependency cycle, reported as one.
+        /// Each element keeps its own registration: it is constructed, injected, booted and disposed as that
+        /// registration says, and only once however many lists it is in.
+        /// </para>
+        /// <para>
+        /// The instance must be assignable to <paramref name="element"/>, which must be a reference type;
+        /// otherwise the build reports it, with the registration's site. Registering
+        /// <c>IReadOnlyList&lt;element&gt;</c> itself in the same context as well is reported as a duplicate.
+        /// </para>
+        /// </remarks>
+        /// <param name="element">The element type of the collection to add this instance to.</param>
+        /// <returns>This same handle, so it chains with <see cref="As"/> and further contributions.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// This is <c>default(Registration)</c>, or the owning <see cref="ContextBuilder"/> has already built.
+        /// </exception>
+        /// <exception cref="ArgumentNullException"><paramref name="element"/> is <c>null</c>.</exception>
+        public Registration AsElementOf(Type element)
+        {
+            if (_services == null)
+            {
+                throw new InvalidOperationException(
+                    "default(Registration) does not refer to a registration. Obtain one from " +
+                    "ServiceCollection.Add.");
+            }
+
+            if (element == null) throw new ArgumentNullException(nameof(element));
+
+            _services.Contribute(_index, element);
             return this;
         }
     }

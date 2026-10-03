@@ -70,6 +70,7 @@ namespace OpenUGD
         private readonly Context _parent;
         private readonly Dictionary<Type, int> _map;
         private readonly object[] _instances;
+        private readonly HashSet<Type> _collections;
         private ContextPlan _plan;
 
         internal Context(ContextScope scope, Context parent, ContextPlan plan)
@@ -79,6 +80,7 @@ namespace OpenUGD
             _parent = parent;
             _map = plan.Map;
             _instances = plan.Instances;
+            _collections = plan.Collections;
             _plan = plan;
         }
 
@@ -158,7 +160,12 @@ namespace OpenUGD
         /// type, not by assignability.
         /// </param>
         /// <param name="service">The singleton, or <c>null</c> when this returns <c>false</c>.</param>
-        /// <returns><c>true</c> if the contract is registered here or inherited from an ancestor.</returns>
+        /// <returns>
+        /// <c>true</c> if the contract is registered here or inherited from an ancestor — and always for
+        /// <c>IReadOnlyList&lt;T&gt;</c> of a reference type that is not registered as an ordinary contract:
+        /// that is this context's collection of <see cref="Registration.AsElementOf" /> contributions, empty
+        /// when there are none.
+        /// </returns>
         /// <exception cref="ArgumentNullException"><paramref name="contract" /> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">
         /// This context's <see cref="Lifetime" /> has terminated, so every service it created has already
@@ -177,8 +184,9 @@ namespace OpenUGD
                 if (service != null) return true;
             }
 
-            service = null;
-            return false;
+            // A collection nothing in this context contributes to is empty, not missing.
+            service = CollectionContract.EmptyFor(contract);
+            return service != null;
         }
 
         /// <summary>
@@ -364,6 +372,8 @@ namespace OpenUGD
         internal object[] Table => _instances;
 
         internal bool CanResolve(Type contract) => _map.ContainsKey(contract);
+
+        internal bool IsCollection(Type contract) => _collections.Contains(contract);
 
         internal IEnumerable<Type> Contracts => _map.Keys;
 

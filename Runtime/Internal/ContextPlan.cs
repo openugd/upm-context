@@ -23,6 +23,9 @@ namespace OpenUGD
 
         /// Registered with AddInstance: the slot is filled before the build and the object is the caller's.
         internal bool HandedOver;
+
+        /// The IReadOnlyList of AsElementOf contributions; Factory gathers them.
+        internal bool Collection;
     }
 
     internal sealed class BootStep
@@ -40,6 +43,7 @@ namespace OpenUGD
         internal Dictionary<Type, int> Map;
         internal object[] Instances;
         internal Step[] Steps;
+        internal HashSet<Type> Collections;
 
         internal int ContextSlot = -1;
         internal int LifetimeSlot = -1;
@@ -159,6 +163,13 @@ namespace OpenUGD
             Claim(context, slot, instance, step.Factory == null);
 
             return instance;
+        }
+
+        internal object Gather(Context context, Type element, int[] slots)
+        {
+            var list = Array.CreateInstance(element, slots.Length);
+            for (var i = 0; i < slots.Length; i++) list.SetValue(Acquire(context, slots[i]), i);
+            return list;
         }
 
         private object Produce(Context context, Step step)
@@ -772,6 +783,7 @@ namespace OpenUGD
 
                 var step = Steps[from];
                 var target = "'" + Diagnostics.Display(Steps[to].Implementation) + "'";
+                if (step.Collection) continue; // a list holding its element is no surprise
                 if (step.Factory != null)
                 {
                     hidden.Add("the factory registered for '" + Diagnostics.Display(step.Implementation) +

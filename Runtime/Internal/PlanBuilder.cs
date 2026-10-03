@@ -36,6 +36,10 @@ namespace OpenUGD
             private readonly List<KeyValuePair<Type, object>> _inherited =
                 new List<KeyValuePair<Type, object>>();
 
+            // IReadOnlyList<T> -> the entries contributing to it, in registration order; empty for a list a
+            // constructor or member asks for and nothing contributes to.
+            private readonly Dictionary<Type, List<int>> _lists = new Dictionary<Type, List<int>>();
+
             private List<Type> _cycle;
 
             internal Compilation(ContextBuilder builder)
@@ -82,6 +86,48 @@ namespace OpenUGD
                 // own, which wins.
                 Automatic(typeof(Context));
                 Automatic(typeof(Lifetime));
+
+                for (var i = 0; i < _entries.Length; i++)
+                {
+                    var elements = _entries[i].Elements;
+                    for (var e = 0; elements != null && e < elements.Count; e++) Contribute(i, elements[e]);
+                }
+            }
+
+            private void Contribute(int index, Type element)
+            {
+                var entry = _entries[index];
+                var list = element.IsValueType ? null : CollectionContract.Of(element);
+                var problem = list == null ? "it is a value type, and a collection holds reference types"
+                    : !element.IsAssignableFrom(entry.Implementation) ? "it does not implement or inherit it"
+                    : _owners.ContainsKey(list) ? "'" + Diagnostics.Display(list) + "' is also registered as an " +
+                                                  "ordinary contract by '" +
+                                                  Diagnostics.Display(_entries[_owners[list]].Implementation) + "'"
+                    : null;
+
+                if (problem != null)
+                {
+                    _errors.Add("'" + Diagnostics.Display(entry.Implementation) + "' cannot be an element of '" +
+                                Diagnostics.Display(element) + "': " + problem + "." + Diagnostics.Where(entry.Site));
+                    return;
+                }
+
+                List<int> contributors;
+                if (!_lists.TryGetValue(list, out contributors)) _lists[list] = contributors = new List<int>();
+                contributors.Add(index);
+                _resolvable.Add(list);
+            }
+
+            /// Whether a dependency on <paramref name="contract"/> can be met. An IReadOnlyList of a reference
+            /// type always can: nothing claimed it, so it is this context's collection, empty if need be.
+            private bool Resolvable(Type contract)
+            {
+                if (_resolvable.Contains(contract)) return true;
+                if (CollectionContract.ElementOf(contract) == null) return false;
+
+                _lists[contract] = new List<int>();
+                _resolvable.Add(contract);
+                return true;
             }
 
             private void Claim(Type contract, int index)
@@ -121,6 +167,7 @@ namespace OpenUGD
                 foreach (var contract in _parent.Contracts)
                 {
                     if (_resolvable.Contains(contract)) continue; // shadowed locally
+                    if (_parent.IsCollection(contract)) continue; // a collection is local to its context
 
                     object instance;
                     if (!_parent.TryResolve(contract, out instance)) continue;
@@ -157,7 +204,7 @@ namespace OpenUGD
                     for (var m = 0; m < members.Length; m++)
                     {
                         var member = members[m];
-                        if (member.Optional || _resolvable.Contains(member.Contract)) continue;
+                        if (member.Optional || Resolvable(member.Contract)) continue;
 
                         _errors.Add(Diagnostics.UnableToResolveMember(member, type, entry.Site, Known()));
                     }
@@ -279,7 +326,7 @@ namespace OpenUGD
                 {
                     var contract = parameters[i].ParameterType;
                     node.Parameters[i] = contract;
-                    if (!reportMissing || _resolvable.Contains(contract)) continue;
+                    if (!reportMissing || Resolvable(contract)) continue;
 
                     _errors.Add(Diagnostics.UnableToResolve(contract, entry.Implementation,
                         "the constructor parameter '" + parameters[i].Name + "'", entry.Site, Known()));
@@ -290,7 +337,7 @@ namespace OpenUGD
             {
                 for (var i = 0; i < parameters.Length; i++)
                 {
-                    if (!_resolvable.Contains(parameters[i].ParameterType)) return false;
+                    if (!Resolvable(parameters[i].ParameterType)) return false;
                 }
 
                 return true;
@@ -342,10 +389,18 @@ namespace OpenUGD
 
                 for (var p = 0; p < node.Parameters.Length; p++)
                 {
+                    // A list depends on every element in it, so its consumer does too.
+                    List<int> elements;
                     int dependency;
-                    if (!_owners.TryGetValue(node.Parameters[p], out dependency)) continue;
+                    if (_lists.TryGetValue(node.Parameters[p], out elements))
+                    {
+                        for (var e = 0; e < elements.Count && _cycle == null; e++) Visit(elements[e], stack);
+                    }
+                    else if (_owners.TryGetValue(node.Parameters[p], out dependency))
+                    {
+                        Visit(dependency, stack);
+                    }
 
-                    Visit(dependency, stack);
                     if (_cycle != null) return;
                 }
 
@@ -366,12 +421,14 @@ namespace OpenUGD
             internal ContextPlan Emit()
             {
                 var count = _entries.Length;
-                var total = count + _automatic.Count + _inherited.Count;
+                var steps = count + _lists.Count;
+                var total = steps + _automatic.Count + _inherited.Count;
 
                 var plan = new ContextPlan {
                     Map = new Dictionary<Type, int>(total),
                     Instances = new object[total],
-                    Steps = new Step[count]
+                    Steps = new Step[steps],
+                    Collections = new HashSet<Type>(_lists.Keys)
                 };
 
                 // Slot == registration index. Construction order is decided by the recursion in
@@ -379,7 +436,23 @@ namespace OpenUGD
                 // sort is needed here and a boot log reads in the order the registrations were written.
                 foreach (var pair in _owners) plan.Map[pair.Key] = pair.Value;
 
+                // Each list is a step after the registrations, built by gathering its elements - which
+                // records each as something the list needs, so the list, and whatever takes it, ranks after
+                // all of them.
                 var next = count;
+                foreach (var pair in _lists)
+                {
+                    var element = CollectionContract.ElementOf(pair.Key);
+                    var slots = pair.Value.ToArray();
+                    plan.Map[pair.Key] = next;
+                    plan.Steps[next++] = new Step {
+                        Implementation = pair.Key,
+                        Factory = context => plan.Gather(context, element, slots),
+                        Collection = true,
+                        ArgumentSlots = new int[0]
+                    };
+                }
+
                 for (var i = 0; i < _automatic.Count; i++)
                 {
                     var contract = _automatic[i];

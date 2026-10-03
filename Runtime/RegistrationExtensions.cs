@@ -33,6 +33,29 @@ namespace OpenUGD
             registration.As(typeof(TContract));
 
         /// <summary>
+        /// Contributes this registration's instance to the collection of <typeparamref name="TElement"/>,
+        /// resolvable only as <c>IReadOnlyList&lt;TElement&gt;</c> — the generic spelling of
+        /// <see cref="Registration.AsElementOf"/>, which has the details: registration order, local to the
+        /// context, empty when nothing contributes, built after every element.
+        /// </summary>
+        /// <remarks>
+        /// <code>
+        /// builder.Services.Add&lt;FpsPanel&gt;().AsElementOf&lt;IDebugPanel&gt;();
+        /// builder.Services.Add&lt;MemoryPanel&gt;().AsElementOf&lt;IDebugPanel&gt;();
+        /// builder.Services.Add&lt;DebugMenu&gt;(); // public DebugMenu(IReadOnlyList&lt;IDebugPanel&gt; panels)
+        /// </code>
+        /// </remarks>
+        /// <typeparam name="TElement">The element type of the collection.</typeparam>
+        /// <param name="registration">The registration whose instance to contribute.</param>
+        /// <returns>The same handle, so it chains.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// <paramref name="registration"/> is <c>default(Registration)</c>, or the owning builder has
+        /// already built.
+        /// </exception>
+        public static Registration AsElementOf<TElement>(this Registration registration) where TElement : class =>
+            registration.AsElementOf(typeof(TElement));
+
+        /// <summary>
         /// Starts a <b>new</b> registration in the collection this one belongs to, for
         /// <typeparamref name="TImpl"/> under itself.
         /// </summary>

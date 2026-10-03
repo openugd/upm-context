@@ -41,6 +41,12 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
   the parent's. A parent-registered singleton is always built and cached in the parent, even when first
   requested through a child.
 - `ContextException` carrying the dependency `Path`.
+- `Registration.AsElementOf<T>()`, for several modules contributing to one thing (decision 2d). The
+  contributions resolve only as `IReadOnlyList<T>`, in registration order; `T` itself stays unregistered.
+  The list is local to its context, empty when nothing contributes, and built once after every element,
+  so whatever takes it is constructed and boots after all of them; an element that takes its own list is
+  reported as a cycle. An `IReadOnlyList<T>` of a reference type that is not registered as an ordinary
+  contract therefore always resolves, so a constructor taking one is always satisfiable.
 - Support for IL2CPP managed code stripping with no `link.xml`. `[Inject]` derives from a linker
   `Preserve` attribute, so every `[Inject]` member survives with the attribute the container reads. The
   entry points that hand a user type to the activator (`Add<T>()`, `TryAdd`, `Registration.Add<T>()`,
@@ -259,5 +265,8 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was
   designed and deliberately deferred; a hand-written factory registration is a permanently supported,
   reflection-free path, so adding the generator later will not be a breaking change.
-- Open generics, keyed services, multi-registration (`IEnumerable<T>` of every implementation),
-  assembly scanning and decorators are not supported, deliberately.
+- Open generics, keyed services, implicit multi-registration (`IEnumerable<T>` of every registration
+  of a contract — `AsElementOf` is the explicit form), assembly scanning and decorators are not
+  supported, deliberately.
+- `AsElementOf` lists are `T[]` arrays created at run time and exposed as `IReadOnlyList<T>`; this was
+  checked on Mono and CoreCLR, not in an IL2CPP player.

@@ -200,6 +200,23 @@ when every boot step completes synchronously. If a step returns an unfinished ta
 it throws a `ContextException` naming that step and its registration, and abandons the build, which is
 cancelled at once and disposes what it constructed when that step finishes.
 
+## Several modules, one list
+
+A registration can contribute its object to a list instead of claiming a contract:
+
+```csharp
+builder.Services.Add<FpsPanel>().AsElementOf<IDebugPanel>();
+builder.Services.Add<MemoryPanel>().AsElementOf<IDebugPanel>();
+builder.Services.Add<DebugMenu>();   // public DebugMenu(IReadOnlyList<IDebugPanel> panels)
+```
+
+The contributions resolve only as `IReadOnlyList<IDebugPanel>`; `IDebugPanel` itself stays unregistered,
+so a single-instance contract is never made ambiguous. The list is in registration order, holds only this
+context's contributions — a child's list does not repeat its parent's — and is empty, not an error, when
+nothing contributes, so an `IReadOnlyList<T>` parameter of a reference type can always be satisfied. It is
+built once, after every element, so `DebugMenu` is constructed and boots after every panel; a panel that
+takes the list itself is a dependency cycle.
+
 ## Optional dependencies
 
 A missing binding is an error. That is the point of the container, and it is why the 1.x injector —
@@ -258,7 +275,7 @@ silent and nothing is reflective about it.
 | `Context` | The built container. `TryResolve`, `Instantiate`, `Inject`, `Dispose`. |
 | `ContextBuilder` | `Services`, `Initializers`, `BuildAsync`, and `Build` for a boot that completes synchronously. |
 | `ServiceCollection` | `Add(Type, factory)`, `Contains`. Everything else is an extension. |
-| `Registration` | What `Add` returns. `As(Type)` adds a contract. A struct — no allocation. |
+| `Registration` | What `Add` returns. `As(Type)` adds a contract, `AsElementOf(Type)` contributes to a list. A struct — no allocation. |
 | `InitializerCollection` | Boot steps that are not services. `Mode` is Sequential by default; Parallel is opt-in. |
 | `IAwakeService`, `IInitializeService` | Opt-in async boot phases. Services enrol automatically. |
 | `ContextException` | What a failed build, resolve or activation throws. `Path` carries the dependency chain. Bad arguments, a disposed context and cancellation throw the standard exceptions. |
