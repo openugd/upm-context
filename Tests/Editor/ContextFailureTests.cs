@@ -180,6 +180,21 @@ namespace OpenUGD.Tests
         }
 
         [Test]
+        public void NothingIsConstructedWhenTheGraphHasACycle()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<Probe>();
+            builder.Services.Add<CycleA>();
+            builder.Services.Add<CycleB>();
+            builder.Services.Add<CycleC>();
+
+            FailToBuild<ContextException>(builder);
+
+            Assert.AreEqual(0, Probe.Constructed,
+                "A constructor cycle is a validation error, so it is rejected before anything is constructed.");
+        }
+
+        [Test]
         public void AnUnresolvableInjectMemberFailsTheBuild()
         {
             var builder = NewBuilder();
