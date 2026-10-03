@@ -29,6 +29,7 @@ namespace OpenUGD
     {
         internal int Rank;
         internal string Name;
+        internal string Site;
         internal Func<Context, CancellationToken, Task> Run;
     }
 
@@ -520,7 +521,7 @@ namespace OpenUGD
             {
                 var entry = entries[i];
                 Add(ref awake, ref initialize, entry.Phase,
-                    new BootStep { Rank = i - entries.Count, Name = entry.Name, Run = entry.Step });
+                    new BootStep { Rank = i - entries.Count, Name = entry.Name, Site = entry.Site, Run = entry.Step });
             }
 
             // Enrolment is by what the instance actually is, not by the registered type, so a factory
@@ -534,6 +535,7 @@ namespace OpenUGD
                 var instance = Instances[i];
                 var rank = ranks[i];
                 var name = Diagnostics.Display(instance.GetType());
+                var site = Steps[i].Site;
 
                 var awakeService = instance as IAwakeService;
                 if (awakeService != null)
@@ -541,6 +543,7 @@ namespace OpenUGD
                     Add(ref awake, ref initialize, BootPhase.Awake, new BootStep {
                         Rank = rank,
                         Name = name + ".AwakeAsync",
+                        Site = site,
                         Run = (context, token) => awakeService.AwakeAsync(token)
                     });
                 }
@@ -551,6 +554,7 @@ namespace OpenUGD
                     Add(ref awake, ref initialize, BootPhase.Initialize, new BootStep {
                         Rank = rank,
                         Name = name + ".InitializeAsync",
+                        Site = site,
                         Run = (context, token) => initializeService.InitializeAsync(token)
                     });
                 }
@@ -614,7 +618,7 @@ namespace OpenUGD
             CancellationToken token)
         {
             List<Exception> failures = null;
-            List<string> names = null;
+            List<BootStep> failed = null;
             var cancelled = false;
 
             for (var t = 0; t < tasks.Length; t++)
@@ -639,7 +643,7 @@ namespace OpenUGD
                     }
 
                     (failures ?? (failures = new List<Exception>())).Add(exception);
-                    (names ?? (names = new List<string>())).Add(steps[first + t].Name);
+                    (failed ?? (failed = new List<BootStep>())).Add(steps[first + t]);
                 }
             }
 
@@ -655,12 +659,13 @@ namespace OpenUGD
 
             var message = new StringBuilder();
             message.Append(failures.Count).Append(" boot steps threw during the ").Append(phase)
-                .Append(" phase of Context.BuildAsync:");
+                .Append(" phase of the build:");
             for (var f = 0; f < failures.Count; f++)
             {
                 var original = failures[f].InnerException ?? failures[f];
-                message.Append("\n      '").Append(names[f]).Append("': ")
-                    .Append(original.GetType().Name).Append(": ").Append(original.Message);
+                message.Append("\n      '").Append(failed[f].Name).Append('\'');
+                if (failed[f].Site != null) message.Append(", registered at ").Append(failed[f].Site);
+                message.Append(": ").Append(Diagnostics.Describe(original));
             }
 
             message.Append("\n      The Context was not built and everything constructed so far has been disposed. ")
@@ -689,18 +694,19 @@ namespace OpenUGD
                 // The build's token is not cancelled, so the step was cancelled by something of its own - a
                 // timeout, a token it made, a cancelled task it awaited. That is the step failing.
                 throw new ContextException(
-                    "'" + step.Name + "' was cancelled during the " + phase + " phase of Context.BuildAsync, " +
-                    "but not through the token the build passed it, so this is a failure of that step (a " +
-                    "timeout or a cancellation of its own) and not a cancellation of the build. The Context " +
-                    "was not built and everything constructed so far has been disposed. The original " +
-                    "exception is the InnerException.", exception);
+                    "'" + step.Name + "' was cancelled during the " + phase + " phase of the build, but not " +
+                    "through the token the build passed it, so this is a failure of that step (a timeout or a " +
+                    "cancellation of its own) and not a cancellation of the build." + Diagnostics.Where(step.Site) +
+                    "\n      The Context was not built and everything constructed so far has been disposed. The " +
+                    "original exception is the InnerException.", exception);
             }
             catch (Exception exception)
             {
                 throw new ContextException(
-                    "'" + step.Name + "' threw during the " + phase + " phase of Context.BuildAsync. The " +
-                    "Context was not built and everything constructed so far has been disposed. The " +
-                    "original exception is the InnerException.", exception);
+                    "'" + step.Name + "' threw " + Diagnostics.Describe(exception) + "\n      during the " + phase +
+                    " phase of the build." + Diagnostics.Where(step.Site) + "\n      The Context was not built " +
+                    "and everything constructed so far has been disposed. The original exception is the " +
+                    "InnerException.", exception);
             }
         }
 

@@ -154,6 +154,53 @@ namespace OpenUGD.Tests
                 new[] { typeof(ResolvesInBody), typeof(NeedsResolver), typeof(ResolvesInBody) }, error.Path);
         }
 
+        // ===== boot =====
+
+        [Test]
+        public void ABootStepThatThrowsIsNamedWithTheRegistrationOfItsService()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<FailsToAwake>(); var line = Line();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains(
+                "'" + Name(typeof(FailsToAwake)) + ".AwakeAsync' threw InvalidOperationException: awake failed",
+                error.Message);
+            StringAssert.Contains("Awake phase", error.Message);
+            StringAssert.Contains("registered at " + ThisFile() + ":" + line, error.Message);
+        }
+
+        [Test]
+        public void AnInitializerThatThrowsIsNamedWithTheLineThatAddedIt()
+        {
+            var builder = NewBuilder();
+            var line = Line() + 1; // the line a multi-line call starts on
+            builder.Initializers.Add(BootPhase.Initialize,
+                (c, ct) => throw new InvalidOperationException("warm-up failed"), "warm-up");
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("'warm-up' threw InvalidOperationException: warm-up failed", error.Message);
+            StringAssert.Contains("registered at " + ThisFile() + ":" + line, error.Message);
+        }
+
+        [Test]
+        public void EveryFailingStepOfAParallelRankIsNamedWithItsSite()
+        {
+            var builder = NewBuilder();
+            builder.Initializers.Mode = StartupMode.Parallel;
+            builder.Services.Add<FailsToAwake>(); var first = Line();
+            builder.Services.Add<AlsoFailsToAwake>(); var second = Line();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("'" + Name(typeof(FailsToAwake)) + ".AwakeAsync', registered at " + ThisFile() +
+                                  ":" + first + ": InvalidOperationException: awake failed", error.Message);
+            StringAssert.Contains("'" + Name(typeof(AlsoFailsToAwake)) + ".AwakeAsync', registered at " +
+                                  ThisFile() + ":" + second, error.Message);
+        }
+
         // ===== fixtures =====
 
         public interface IGauge { }
@@ -198,6 +245,18 @@ namespace OpenUGD.Tests
         public sealed class LoopB
         {
             public LoopB(LoopA a) { }
+        }
+
+        public sealed class FailsToAwake : IAwakeService
+        {
+            public System.Threading.Tasks.Task AwakeAsync(System.Threading.CancellationToken cancellationToken) =>
+                throw new InvalidOperationException("awake failed");
+        }
+
+        public sealed class AlsoFailsToAwake : IAwakeService
+        {
+            public System.Threading.Tasks.Task AwakeAsync(System.Threading.CancellationToken cancellationToken) =>
+                throw new InvalidOperationException("also failed");
         }
 
         public sealed class ResolvesInBody

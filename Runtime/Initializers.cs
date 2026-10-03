@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -39,7 +40,8 @@ namespace OpenUGD
     /// <para>
     /// <b>A phase that throws fails the build.</b> Everything constructed so far is disposed in reverse
     /// construction order and no <see cref="Context" /> is returned; the original exception is wrapped in a
-    /// <see cref="ContextException" /> naming the step and the phase, with the original as its
+    /// <see cref="ContextException" /> naming the step, the phase and the file and line the step was
+    /// registered at, with the original as its
     /// <see cref="Exception.InnerException" />. A cancellation of the build propagates unwrapped; an
     /// <see cref="OperationCanceledException" /> a step throws while the build's token is <i>not</i>
     /// cancelled — a timeout of its own, say — is that step failing, and is wrapped like any other exception.
@@ -189,12 +191,14 @@ namespace OpenUGD
             internal readonly BootPhase Phase;
             internal readonly Func<Context, CancellationToken, Task> Step;
             internal readonly string Name;
+            internal readonly string Site;
 
-            internal Entry(BootPhase phase, Func<Context, CancellationToken, Task> step, string name)
+            internal Entry(BootPhase phase, Func<Context, CancellationToken, Task> step, string name, string site)
             {
                 Phase = phase;
                 Step = step;
                 Name = name;
+                Site = site;
             }
         }
 
@@ -229,6 +233,9 @@ namespace OpenUGD
         /// phase, which tells a reader where to look but nothing about what the step was doing — worth a few
         /// words at the call site.
         /// </param>
+        /// <param name="file">[compiler-supplied] The call site's file, named with the step when it fails. Do
+        /// not pass it.</param>
+        /// <param name="line">[compiler-supplied] The call site's line. Do not pass it.</param>
         /// <returns>This collection, so steps can be chained.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="step" /> is <c>null</c>.</exception>
         /// <exception cref="InvalidOperationException">
@@ -237,7 +244,7 @@ namespace OpenUGD
         /// another builder rather than reusing a spent one.
         /// </exception>
         public InitializerCollection Add(BootPhase phase, Func<Context, CancellationToken, Task> step,
-            string name = null)
+            string name = null, [CallerFilePath] string file = null, [CallerLineNumber] int line = 0)
         {
             if (step == null) throw new ArgumentNullException(nameof(step));
             if (_sealed)
@@ -247,7 +254,8 @@ namespace OpenUGD
                     "Context, so adding a step here would silently never run. Create another builder.");
             }
 
-            _entries.Add(new Entry(phase, step, name ?? phase + " initializer #" + _entries.Count));
+            _entries.Add(new Entry(phase, step, name ?? phase + " initializer #" + _entries.Count,
+                file == null ? null : file + ":" + line));
             return this;
         }
 

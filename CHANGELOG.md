@@ -189,6 +189,13 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   a factory that resolves a service, or a constructor that resolves one from its `Context` — with its
   registration site.
 
+- **A boot step that fails is named with the file and line it was registered at** (audit CX-14). The
+  message named the step and the phase only. A service's step now carries the site of the registration
+  that owns the service, and a step added to `InitializerCollection` the site of its `Add` call, which
+  records it the way `ServiceCollection.Add` does (two compiler-supplied parameters after `name`). Each
+  step listed in a `StartupMode.Parallel` rank failure carries its site too, and the step's exception
+  type and message are on the first line.
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was
