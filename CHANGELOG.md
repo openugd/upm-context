@@ -33,8 +33,8 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
 - Two opt-in async boot phases, `IAwakeService` and `IInitializeService`. Services enrol automatically;
   `InitializerCollection` exists only for boot steps that are not services. Within a phase the boot runs
   by dependency rank and, within a rank, one step at a time in registration order
-  (`StartupMode.Sequential`, the default). `StartupMode.Parallel` runs the steps of a rank concurrently
-  and is opt-in.
+  (`StartupMode.Sequential`, the default). `StartupMode.Parallel` boots the services of a rank
+  concurrently and is opt-in.
 - Child contexts: `Context.CreateBuilder(lifetime, parent)`. A child sees the parent's registrations,
   shadows what it re-registers, and its singletons die with its own `Lifetime`, which ends no later than
   the parent's. A parent-registered singleton is always built and cached in the parent, even when first

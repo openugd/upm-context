@@ -146,9 +146,10 @@ Services that hold each other through `[Inject]` members cannot each boot after 
 shares one rank, after everything its members depend on outside it, so within the cycle registration
 order decides: register first the one that should boot first.
 
-`builder.Initializers.Mode = StartupMode.Parallel` runs the steps of one rank concurrently instead. On
-Unity's main thread that interleaves them rather than using other threads, so it only saves time when
-steps await I/O, and the order is no longer deterministic.
+`builder.Initializers.Mode = StartupMode.Parallel` boots the services of one rank concurrently instead.
+On Unity's main thread that interleaves them rather than using other threads, so it only saves time when
+steps await I/O, and the order is no longer deterministic. Steps added to `builder.Initializers` run
+first, one at a time in the order they were added, in either mode.
 
 ## Optional dependencies
 

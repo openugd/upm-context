@@ -31,6 +31,8 @@ namespace OpenUGD
     /// lets each boot after the other. A member on such a cycle is not counted. The services on the cycle
     /// share one rank, the first after everything any of them depends on outside it, so within it they boot
     /// in registration order; a constructor or factory dependency inside the cycle still boots first.
+    /// </para>
+    /// <para>
     /// Steps added to an <see cref="InitializerCollection" /> are outside the dependency graph and run
     /// ahead of every service in their phase, one at a time, in the order they were added.
     /// </para>
@@ -39,8 +41,9 @@ namespace OpenUGD
     /// construction order and no <see cref="Context" /> is returned; the original exception is wrapped in a
     /// <see cref="ContextException" /> naming the step and the phase, with the original as its
     /// <see cref="Exception.InnerException" />. A cancellation of the build propagates unwrapped; an
-    /// <see cref="OperationCanceledException" /> a step throws while the build's token is <i>not</i> cancelled —
-    /// a timeout of its own, say — is that step failing, and is wrapped like any other exception.
+    /// <see cref="OperationCanceledException" /> a step throws while the build's token is <i>not</i>
+    /// cancelled — a timeout of its own, say — is that step failing, and is wrapped like any other exception.
+    /// The teardown waits for every step still running, so it never disposes what one of them is using.
     /// </para>
     /// </remarks>
     public enum BootPhase
