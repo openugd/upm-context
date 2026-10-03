@@ -131,6 +131,14 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   Ownership now goes by the object, compared by reference: the first registration that holds an object
   claims it, an `AddInstance` object is never disposed, and an object any ancestor context holds is
   never injected, booted or disposed by a descendant.
+- **A service no longer boots before a collaborator it holds through an `[Inject]` member** (audit CX-9).
+  Boot rank counted only constructor parameters and what a factory resolved, so a member edge — and every
+  edge of an `AddInstance` object, which has no constructor — was invisible, and under
+  `StartupMode.Parallel` the holder raced the collaborator whatever the registration order. Rank now
+  counts member edges as well, for `AddInstance` objects too. Members may be cyclic, and an edge that
+  closes a cycle cannot be honoured, so it is not counted: the services of such a cycle share one rank,
+  after everything any of them depends on outside it, and boot in registration order within it; a
+  constructor or factory dependency inside the cycle still boots first.
 
 ### Known limitations
 

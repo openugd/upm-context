@@ -20,17 +20,19 @@ namespace OpenUGD
     /// </para>
     /// <para>
     /// <b>Order within a phase is dependency rank first, then registration order.</b> Rank is the longest
-    /// path from a service down to a leaf, counting what a constructor takes as a parameter and what a
-    /// registration factory resolves while it runs, so everything a service is built out of has finished
-    /// the phase before that service starts it. Services of the same rank run one at a time in the order
-    /// they were registered, under the default <see cref="StartupMode.Sequential" />.
+    /// path from a service down to a leaf, counting what a constructor takes as a parameter, what a
+    /// registration factory resolves while it runs, and what an <c>[Inject]</c> member holds — objects
+    /// handed to <c>AddInstance</c> included — so everything a service is built out of or holds has
+    /// finished the phase before that service starts it. Services of the same rank run one at a time in the
+    /// order they were registered, under the default <see cref="StartupMode.Sequential" />.
     /// </para>
     /// <para>
-    /// An <c>[Inject]</c> member is not counted in the rank — it is assigned after every constructor has
-    /// returned — so a service may boot before the collaborator it holds through one. When the two share a
-    /// rank, registering the collaborator first makes it boot first; across ranks, rank decides. Steps added
-    /// to an <see cref="InitializerCollection" /> are outside the dependency graph and run ahead of every
-    /// service in their phase, one at a time, in the order they were added.
+    /// <b>Cycles of members.</b> Members may be cyclic — two services may hold each other — and no order
+    /// lets each boot after the other. A member on such a cycle is not counted. The services on the cycle
+    /// share one rank, the first after everything any of them depends on outside it, so within it they boot
+    /// in registration order; a constructor or factory dependency inside the cycle still boots first.
+    /// Steps added to an <see cref="InitializerCollection" /> are outside the dependency graph and run
+    /// ahead of every service in their phase, one at a time, in the order they were added.
     /// </para>
     /// <para>
     /// <b>A phase that throws fails the build.</b> Everything constructed so far is disposed in reverse
@@ -79,8 +81,8 @@ namespace OpenUGD
         /// The default. One step at a time: the steps of an <see cref="InitializerCollection" /> first, in
         /// the order they were added, then the services rank by rank and, within a rank, in registration
         /// order. The boot is deterministic, a failure stops it at the step that failed, and registration
-        /// order is a lever that works when a step depends on something its rank does not show, such as a
-        /// collaborator held through an <c>[Inject]</c> member.
+        /// order is a lever that works when a step depends on something its rank cannot show, such as a
+        /// collaborator on a cycle of <c>[Inject]</c> members.
         /// </summary>
         Sequential = 0,
 

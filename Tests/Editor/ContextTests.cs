@@ -1022,11 +1022,10 @@ namespace OpenUGD.Tests
         }
 
         [Test]
-        public void ACollaboratorHeldThroughAMemberHasBootedWhenRegisteredFirstInTheSameRank()
+        public void ACollaboratorHeldThroughAMemberHasBootedWhenRegisteredFirst()
         {
-            // A member is not a rank edge, so only registration order puts the collaborator first - which
-            // works because the default mode runs a rank one step at a time. Under Parallel the holder would
-            // start while the collaborator is still awaiting.
+            // A member counts towards rank, so the holder boots after the collaborator in either order;
+            // ContextBootTests covers the collaborator registered second and the Parallel mode.
             var builder = NewBuilder();
             builder.Services.Add<LateReady>();
             builder.Services.Add<HoldsLateReady>();

@@ -164,6 +164,106 @@ namespace OpenUGD.Tests
             CollectionAssert.AreEqual(new[] { "step:a", "step:b", "service" }, log.Entries);
         }
 
+        // ===== what counts towards rank (CX-9) =====
+
+        [Test]
+        public void AServiceBootsAfterACollaboratorItHoldsThroughAMemberWhateverTheOrder(
+            [Values(StartupMode.Sequential, StartupMode.Parallel)] StartupMode mode)
+        {
+            var builder = NewBuilder();
+            builder.Initializers.Mode = mode;
+            builder.Services.Add<HoldsLateReady>(); // registered first, and it holds the other through a member
+            builder.Services.Add<LateReady>();
+
+            var context = Build(builder);
+
+            Assert.IsTrue(context.Resolve<HoldsLateReady>().SawReady,
+                "The holder must not boot before what it holds through an [Inject] member.");
+        }
+
+        [Test]
+        public void AnAddInstanceObjectBootsAfterWhatItHoldsThroughAMember()
+        {
+            var holder = new HoldsLateReady();
+            var builder = NewBuilder();
+            builder.Services.AddInstance(holder);
+            builder.Services.Add<LateReady>();
+
+            Build(builder);
+
+            Assert.IsTrue(holder.SawReady);
+        }
+
+        [Test]
+        public void AServiceBootsAfterAnAddInstanceObjectItHoldsThroughAMember()
+        {
+            var late = new LateReady();
+            var builder = NewBuilder();
+            builder.Services.Add<HoldsLateReady>();
+            builder.Services.AddInstance(late);
+
+            var context = Build(builder);
+
+            Assert.IsTrue(late.Ready);
+            Assert.IsTrue(context.Resolve<HoldsLateReady>().SawReady);
+        }
+
+        [Test]
+        public void AMemberCycleSharesOneRankAfterEverythingItDependsOn()
+        {
+            foreach (var bFirst in new[] { true, false })
+            {
+                var log = new Log();
+                var builder = NewBuilder(bFirst ? "b-first" : "a-first");
+                builder.Services.AddInstance(log);
+                if (bFirst) builder.Services.Add<CycleB>();
+                builder.Services.Add<CycleA>();
+                if (!bFirst) builder.Services.Add<CycleB>();
+                builder.Services.Add<CycleLeaf>(); // registered last; only CycleA holds it
+
+                Build(builder);
+
+                // Both wait for what one of them holds outside the cycle, then go in registration order.
+                CollectionAssert.AreEqual(
+                    bFirst
+                        ? new[] { "leaf:enter", "leaf:exit", "b", "a" }
+                        : new[] { "leaf:enter", "leaf:exit", "a", "b" },
+                    log.Entries, (bFirst ? "B registered first" : "A registered first") + ": " + log);
+            }
+        }
+
+        [Test]
+        public void AConstructorDependencyInsideAMemberCycleStillBootsFirst()
+        {
+            var log = new Log();
+            var builder = NewBuilder();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<BuiltFromInner>(); // takes Inner in its constructor; Inner holds it back
+            builder.Services.Add<Inner>();
+
+            Build(builder);
+
+            CollectionAssert.AreEqual(new[] { "inner:enter", "inner:exit", "outer" }, log.Entries);
+        }
+
+        [Test]
+        public void AForwardingFactoryBootsItsTargetAtTheTargetsOwnRank()
+        {
+            // The forwarding registration ranks one above its target, but the object is the target's: it must
+            // boot where the target ranks, ahead of whatever takes the target, not alongside it.
+            var log = new Log();
+            var builder = NewBuilder();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<IForwarded>(c => c.Resolve<Forwarded>());
+            builder.Services.Add<NeedsForwarded>();
+            builder.Services.Add<Forwarded>();
+            builder.Initializers.Mode = StartupMode.Parallel;
+
+            Build(builder);
+
+            CollectionAssert.AreEqual(new[] { "forwarded:enter", "forwarded:exit", "needs" }, log.Entries);
+        }
+
         // ===== fixtures =====
 
         public sealed class FailsFirst : IAwakeService
@@ -200,6 +300,118 @@ namespace OpenUGD.Tests
             public Task AwakeAsync(CancellationToken cancellationToken)
             {
                 _log.Add("service");
+                return Task.CompletedTask;
+            }
+        }
+
+        public sealed class LateReady : IAwakeService
+        {
+            public volatile bool Ready;
+
+            public async Task AwakeAsync(CancellationToken ct)
+            {
+                await Task.Delay(20, ct);
+                Ready = true;
+            }
+        }
+
+        public sealed class HoldsLateReady : IAwakeService
+        {
+            [Inject] public LateReady Collaborator;
+            public bool SawReady;
+
+            public Task AwakeAsync(CancellationToken ct)
+            {
+                SawReady = Collaborator.Ready;
+                return Task.CompletedTask;
+            }
+        }
+
+        public sealed class CycleLeaf : IAwakeService
+        {
+            [Inject] public Log Log;
+
+            public async Task AwakeAsync(CancellationToken ct)
+            {
+                Log.Add("leaf:enter");
+                await Task.Delay(20, ct);
+                Log.Add("leaf:exit");
+            }
+        }
+
+        public sealed class CycleA : IAwakeService
+        {
+            [Inject] public Log Log;
+            [Inject] public CycleB B;
+            [Inject] public CycleLeaf Leaf;
+
+            public Task AwakeAsync(CancellationToken ct)
+            {
+                Log.Add("a");
+                return Task.CompletedTask;
+            }
+        }
+
+        public sealed class CycleB : IAwakeService
+        {
+            [Inject] public Log Log;
+            [Inject] public CycleA A;
+
+            public Task AwakeAsync(CancellationToken ct)
+            {
+                Log.Add("b");
+                return Task.CompletedTask;
+            }
+        }
+
+        public sealed class Inner : IAwakeService
+        {
+            [Inject] public Log Log;
+            [Inject] public BuiltFromInner Outer;
+
+            public async Task AwakeAsync(CancellationToken ct)
+            {
+                Log.Add("inner:enter");
+                await Task.Delay(20, ct);
+                Log.Add("inner:exit");
+            }
+        }
+
+        public sealed class BuiltFromInner : IAwakeService
+        {
+            private readonly Log _log;
+            public BuiltFromInner(Inner inner, Log log) { _log = log; }
+
+            public Task AwakeAsync(CancellationToken ct)
+            {
+                _log.Add("outer");
+                return Task.CompletedTask;
+            }
+        }
+
+        public interface IForwarded { }
+
+        public sealed class Forwarded : IForwarded, IAwakeService
+        {
+            private readonly Log _log;
+            public Forwarded(Log log) { _log = log; }
+
+            public async Task AwakeAsync(CancellationToken ct)
+            {
+                _log.Add("forwarded:enter");
+                await Task.Delay(20, ct);
+                _log.Add("forwarded:exit");
+            }
+        }
+
+        public sealed class NeedsForwarded : IAwakeService
+        {
+            private readonly Log _log;
+            public NeedsForwarded(Forwarded forwarded, Log log) { _log = log; }
+
+            public Task AwakeAsync(CancellationToken ct)
+            {
+                _log.Add("needs");
                 return Task.CompletedTask;
             }
         }

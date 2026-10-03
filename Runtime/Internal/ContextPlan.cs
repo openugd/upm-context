@@ -16,7 +16,10 @@ namespace OpenUGD
         internal ConstructorInfo Constructor;
         internal int[] ArgumentSlots;
         internal string Site;
-        internal int Rank;
+
+        /// The registrations of this context that building this one acquired - constructor arguments and
+        /// whatever a factory resolved - in the order acquired. Null when there were none.
+        internal List<int> Needs;
 
         /// Registered with AddInstance: the slot is filled before the build and the object is the caller's.
         internal bool HandedOver;
@@ -63,6 +66,9 @@ namespace OpenUGD
         private HashSet<object> _ancestors;
         private Context _parent;
 
+        // Build-time only: per claiming slot, the claiming slots of the objects its [Inject] members hold.
+        private List<int>[] _held;
+
         internal Context CreateContext(Lifetime.Definition definition, Context parent)
         {
             _state = new byte[Steps.Length];
@@ -70,6 +76,7 @@ namespace OpenUGD
             _claims = new Dictionary<object, int>(IdentityComparer.Instance);
             _owner = new int[Steps.Length];
             for (var i = 0; i < _owner.Length; i++) _owner[i] = Foreign;
+            _held = new List<int>[Steps.Length];
             _parent = parent;
 
             var context = new Context(definition, parent, this);
@@ -100,11 +107,8 @@ namespace OpenUGD
 
             if (_current >= 0 && _current != slot && slot < Steps.Length)
             {
-                // Rank = longest dependency path. Every dependency is fully constructed - and therefore
-                // has its final rank - before this line runs, so one pass over the actual construction
-                // order computes the true longest path, factories included.
-                var rank = Steps[slot].Rank + 1;
-                if (Steps[_current].Rank < rank) Steps[_current].Rank = rank;
+                var step = Steps[_current];
+                (step.Needs ?? (step.Needs = new List<int>())).Add(slot);
             }
 
             return instance;
@@ -252,8 +256,195 @@ namespace OpenUGD
                     }
 
                     member.SetValue(instance, value);
+
+                    // A member is a boot dependency too: the holder should not boot before what it holds.
+                    // Only objects of this context count - an inherited one booted with its own context.
+                    int target;
+                    if (!Map.TryGetValue(member.Contract, out target) || target >= Steps.Length) continue;
+
+                    var held = _owner[target];
+                    if (held != Foreign && held != i) (_held[i] ?? (_held[i] = new List<int>())).Add(held);
                 }
             }
+        }
+
+        /// Ranks every object this context claimed for the boot, by the longest path of what it depends on:
+        /// what building it acquired (constructor arguments, what a factory resolved) and what its [Inject]
+        /// members hold. Members may be cyclic and constructors may not, so only a member edge can close a
+        /// cycle; a member edge that does is not counted, since no order satisfies it. The objects of such a
+        /// cycle share one rank - the first after everything any of them depends on outside it - except that
+        /// a constructor or factory dependency inside the cycle is still ranked below what needs it.
+        private int[] Rank()
+        {
+            var count = Steps.Length;
+            var hard = new List<int>[count];
+            for (var s = 0; s < count; s++)
+            {
+                var owner = _owner[s];
+                var needs = Steps[s].Needs;
+                if (owner == Foreign || needs == null) continue;
+
+                // Every registration of one object contributes what it needed to that object's node.
+                for (var n = 0; n < needs.Count; n++)
+                {
+                    var target = _owner[needs[n]];
+                    if (target == Foreign || target == owner) continue;
+                    (hard[owner] ?? (hard[owner] = new List<int>())).Add(target);
+                }
+            }
+
+            List<List<int>> order;
+            var component = StronglyConnected(hard, _held, out order);
+
+            var rank = new int[count];
+            var height = new int[count];
+            var colour = new byte[count];
+            for (var c = 0; c < order.Count; c++)
+            {
+                // Tarjan completes a component only after every component it reaches, so every rank read
+                // below from outside this component is final.
+                var members = order[c];
+                var floor = 0;
+                for (var m = 0; m < members.Count; m++)
+                {
+                    floor = Math.Max(floor, Floor(hard[members[m]], component, c, rank));
+                    floor = Math.Max(floor, Floor(_held[members[m]], component, c, rank));
+                }
+
+                for (var m = 0; m < members.Count; m++)
+                {
+                    var node = members[m];
+                    rank[node] = members.Count == 1 ? floor : floor + Height(node, hard, component, c, height, colour);
+                }
+            }
+
+            return rank;
+        }
+
+        private static int Floor(List<int> edges, int[] component, int current, int[] rank)
+        {
+            var floor = 0;
+            if (edges == null) return floor;
+
+            for (var e = 0; e < edges.Count; e++)
+            {
+                var target = edges[e];
+                if (component[target] != current) floor = Math.Max(floor, rank[target] + 1);
+            }
+
+            return floor;
+        }
+
+        /// The longest path along constructor and factory edges that stay inside one component. Those edges
+        /// form a cycle only when one object is returned by several factories that also need each other's
+        /// dependencies; the walk then cuts the cycle where it meets it.
+        private static int Height(int node, List<int>[] hard, int[] component, int current, int[] height,
+            byte[] colour)
+        {
+            if (colour[node] == 2) return height[node];
+
+            colour[node] = 1;
+            var best = 0;
+            var edges = hard[node];
+            if (edges != null)
+            {
+                for (var e = 0; e < edges.Count; e++)
+                {
+                    var target = edges[e];
+                    if (component[target] != current || colour[target] == 1) continue;
+                    best = Math.Max(best, Height(target, hard, component, current, height, colour) + 1);
+                }
+            }
+
+            colour[node] = 2;
+            height[node] = best;
+            return best;
+        }
+
+        /// Tarjan's algorithm over both kinds of edge, without recursion. Returns each node's component and,
+        /// through <paramref name="order"/>, the components in the order they completed: every component
+        /// after all the components it reaches.
+        private int[] StronglyConnected(List<int>[] hard, List<int>[] soft, out List<List<int>> order)
+        {
+            var count = Steps.Length;
+            var index = new int[count];
+            var low = new int[count];
+            var component = new int[count];
+            var onStack = new bool[count];
+            for (var i = 0; i < count; i++)
+            {
+                index[i] = -1;
+                component[i] = -1;
+            }
+
+            order = new List<List<int>>();
+            var stack = new Stack<int>();
+            var calls = new Stack<KeyValuePair<int, int>>(); // node, next edge
+            var next = 0;
+
+            for (var root = 0; root < count; root++)
+            {
+                if (_owner[root] != root || index[root] >= 0) continue;
+
+                index[root] = low[root] = next++;
+                stack.Push(root);
+                onStack[root] = true;
+                calls.Push(new KeyValuePair<int, int>(root, 0));
+
+                while (calls.Count > 0)
+                {
+                    var call = calls.Pop();
+                    var node = call.Key;
+                    var edge = call.Value;
+                    var hardCount = hard[node] == null ? 0 : hard[node].Count;
+                    var total = hardCount + (soft[node] == null ? 0 : soft[node].Count);
+
+                    if (edge < total)
+                    {
+                        calls.Push(new KeyValuePair<int, int>(node, edge + 1));
+                        var target = edge < hardCount ? hard[node][edge] : soft[node][edge - hardCount];
+
+                        if (index[target] < 0)
+                        {
+                            index[target] = low[target] = next++;
+                            stack.Push(target);
+                            onStack[target] = true;
+                            calls.Push(new KeyValuePair<int, int>(target, 0));
+                        }
+                        else if (onStack[target])
+                        {
+                            low[node] = Math.Min(low[node], index[target]);
+                        }
+
+                        continue;
+                    }
+
+                    if (low[node] == index[node])
+                    {
+                        var members = new List<int>();
+                        int member;
+                        do
+                        {
+                            member = stack.Pop();
+                            onStack[member] = false;
+                            component[member] = order.Count;
+                            members.Add(member);
+                        } while (member != node);
+
+                        // Registration order within the component, so a cycle reads the way it was written.
+                        members.Sort();
+                        order.Add(members);
+                    }
+
+                    if (calls.Count > 0)
+                    {
+                        var parent = calls.Peek().Key;
+                        low[parent] = Math.Min(low[parent], low[node]);
+                    }
+                }
+            }
+
+            return component;
         }
 
         internal void CollectBootSteps(InitializerCollection initializers)
@@ -275,14 +466,15 @@ namespace OpenUGD
             }
 
             // Enrolment is by what the instance actually is, not by the registered type, so a factory
-            // returning a subtype is still enrolled. Once per object, at the rank of the registration that
-            // claimed it, and never for an object an ancestor holds - that one booted with its own context.
+            // returning a subtype is still enrolled. Once per object, under the registration that claimed it,
+            // and never for an object an ancestor holds - that one booted with its own context.
+            var ranks = Rank();
             for (var i = 0; i < Steps.Length; i++)
             {
                 if (_owner[i] != i) continue;
 
                 var instance = Instances[i];
-                var rank = Steps[i].Rank;
+                var rank = ranks[i];
                 var name = Diagnostics.Display(instance.GetType());
 
                 var awakeService = instance as IAwakeService;

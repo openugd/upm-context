@@ -135,11 +135,13 @@ For a one-off object that is *not* registered and *not* owned by the container, 
 
 `BuildAsync` awaits `AwakeAsync` on every service that implements `IAwakeService`, then
 `InitializeAsync` on every `IInitializeService`. Within each phase a service starts only after everything
-it takes in its constructor, or resolves in its factory, has finished that phase. Services of the same
-dependency rank run one at a time, **in registration order**.
+it takes in its constructor, resolves in its factory, or holds through an `[Inject]` member has finished
+that phase — objects handed to `AddInstance` included. Services of the same dependency rank run one at a
+time, **in registration order**.
 
-An `[Inject]` member does not count towards rank. If a service needs a collaborator it holds through a
-member to have booted first, and the two share a rank, register the collaborator first.
+Services that hold each other through `[Inject]` members cannot each boot after the other. Such a cycle
+shares one rank, after everything its members depend on outside it, so within the cycle registration
+order decides: register first the one that should boot first.
 
 `builder.Initializers.Mode = StartupMode.Parallel` runs the steps of one rank concurrently instead. On
 Unity's main thread that interleaves them rather than using other threads, so it only saves time when
