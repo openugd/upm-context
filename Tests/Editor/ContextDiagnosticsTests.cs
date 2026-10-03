@@ -201,6 +201,25 @@ namespace OpenUGD.Tests
                                   ThisFile() + ":" + second, error.Message);
         }
 
+        // ===== Instantiate =====
+
+        [Test]
+        public void InstantiateSuggestsTheRegistrationThatImplementsTheMissingContract()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<Gauge>(c => new Gauge(null));
+            var context = Build(builder);
+
+            var error = Assert.Throws<ContextException>(() => context.Instantiate<NeedsGauge>());
+
+            StringAssert.Contains(
+                "Unable to resolve service for type '" + Name(typeof(IGauge)) + "' while attempting to activate '" +
+                Name(typeof(NeedsGauge)) + "'", error.Message);
+            StringAssert.Contains("required by the constructor parameter 'gauge'", error.Message);
+            StringAssert.Contains("Add .As<IGauge>() to its registration", error.Message,
+                "Instantiate gives the same suggestion the build would.");
+        }
+
         // ===== fixtures =====
 
         public interface IGauge { }

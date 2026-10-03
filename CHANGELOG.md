@@ -196,6 +196,11 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   step listed in a `StartupMode.Parallel` rank failure carries its site too, and the step's exception
   type and message are on the first line.
 
+- **`Instantiate` reports a missing dependency the way the build does** (audit CX-14). It said only
+  "Unable to resolve service for type 'X' (constructor parameter 'x')". It now uses the build's wording,
+  names the type it was activating and the parameter, and adds the build's suggestion: a registered type
+  that implements the contract but was not registered as it, or the nearest registered name.
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was

@@ -260,12 +260,12 @@ namespace OpenUGD
                 var index = metadata.MarkedIndex;
                 object[] values;
                 string missing;
-                if (TryBind(context, metadata.Parameters[index], args, used, out values, out missing))
+                if (TryBind(context, type, metadata.Parameters[index], args, used, out values, out missing))
                     return Invoke(type, metadata.Constructors[index], values);
 
                 throw new ContextException(
                     "Cannot instantiate '" + Diagnostics.Display(type) +
-                    "': its [Inject] constructor cannot be satisfied. " + missing);
+                    "': its [Inject] constructor cannot be satisfied.\n      " + missing);
             }
 
             if (metadata.PublicCount == 0)
@@ -284,7 +284,7 @@ namespace OpenUGD
 
                 object[] values;
                 string missing;
-                if (TryBind(context, metadata.Parameters[i], args, used, out values, out missing))
+                if (TryBind(context, type, metadata.Parameters[i], args, used, out values, out missing))
                     return Invoke(type, metadata.Constructors[i], values);
 
                 if (firstFailure == null) firstFailure = missing;
@@ -292,7 +292,7 @@ namespace OpenUGD
 
             throw new ContextException(
                 "Cannot instantiate '" + Diagnostics.Display(type) +
-                "': no public constructor could be satisfied from the supplied arguments and this context. " +
+                "': no public constructor could be satisfied from the supplied arguments and this context.\n      " +
                 firstFailure);
         }
 
@@ -310,8 +310,8 @@ namespace OpenUGD
             }
         }
 
-        private static bool TryBind(Context context, ParameterInfo[] parameters, object[] args, bool[] used,
-            out object[] values, out string missing)
+        private static bool TryBind(Context context, Type type, ParameterInfo[] parameters, object[] args,
+            bool[] used, out object[] values, out string missing)
         {
             missing = null;
             if (parameters.Length == 0)
@@ -348,8 +348,9 @@ namespace OpenUGD
                     continue;
                 }
 
-                missing = "Unable to resolve service for type '" + Diagnostics.Display(contract) +
-                          "' (constructor parameter '" + parameters[i].Name + "').";
+                // The build's wording and suggestions, so a missing .As<> reads the same here as there.
+                missing = Diagnostics.UnableToResolve(contract, type,
+                    "the constructor parameter '" + parameters[i].Name + "'", null, context.Contracts);
                 values = null;
                 return false;
             }

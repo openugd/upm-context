@@ -223,7 +223,9 @@ namespace OpenUGD
         /// </exception>
         /// <exception cref="ContextException">
         /// <paramref name="type" /> cannot be activated; it has more than one <c>[Inject]</c> constructor;
-        /// no public constructor could be satisfied from <paramref name="args" /> and this context; the
+        /// no public constructor could be satisfied from <paramref name="args" /> and this context — the
+        /// message names the parameter that could not be supplied, with the suggestion a build error would
+        /// make (a registered type that implements its contract, or the nearest registered name); the
         /// constructor threw, in which case it is the <see cref="Exception.InnerException" />; or member
         /// injection failed, as for <see cref="Inject" />.
         /// </exception>
