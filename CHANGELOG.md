@@ -36,8 +36,9 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
   (`StartupMode.Sequential`, the default). `StartupMode.Parallel` runs the steps of a rank concurrently
   and is opt-in.
 - Child contexts: `Context.CreateBuilder(lifetime, parent)`. A child sees the parent's registrations,
-  shadows what it re-registers, and its singletons die with its own `Lifetime`. A parent-registered
-  singleton is always built and cached in the parent, even when first requested through a child.
+  shadows what it re-registers, and its singletons die with its own `Lifetime`, which ends no later than
+  the parent's. A parent-registered singleton is always built and cached in the parent, even when first
+  requested through a child.
 - `ContextException` carrying the dependency `Path`.
 - Support for IL2CPP managed code stripping with no `link.xml`. `[Inject]` derives from a linker
   `Preserve` attribute, so every `[Inject]` member survives with the attribute the container reads. The
@@ -100,6 +101,12 @@ these changes.
   follows `com.openugd.lifetime` 2.0.0. The same applies to the teardown exception that a failed
   `BuildAsync` puts second in its `AggregateException`. Migration: catch the exception your service
   throws (or `Exception`) rather than only `AggregateException`.
+- **Breaking: `Context.CreateBuilder` on a terminated lifetime or a disposed parent no longer throws.** It
+  returns a builder that is born terminated — the rule `Lifetime.DefineNested` follows in
+  `com.openugd.lifetime` 2.0.0 — whose `BuildAsync` throws `OperationCanceledException` without
+  constructing anything, as it does when the scope ends just after `CreateBuilder`. Migration: code that
+  caught `InvalidOperationException` from `CreateBuilder` catches `OperationCanceledException` from
+  `BuildAsync`, which it has to handle anyway for a scope that ends during the build.
 
 ### Fixed
 
@@ -157,6 +164,12 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   (the caller's token is cancelled, or the scope ends during the build) and, once the context is live,
   when the context ends, before anything is disposed — so work a step leaves running can stop on it. The
   caller's token is listened to only while the build runs.
+- **A child given a lifetime of its own still ends with its parent** (audit CX-3). The child's scope was
+  nested in `lifetime ?? parent.Lifetime`, so a child built on any lifetime other than the parent's
+  outlived a disposed parent and went on handing out its disposed services. A child's scope is now also
+  linked to the parent's lifetime, and ends — before the parent's services are disposed — with whichever
+  of the two ends first. `BuildAsync` rechecks: a parent disposed after `CreateBuilder` cancels the build
+  before anything is constructed, and one disposed during the boot cancels it like any end of the scope.
 
 ### Known limitations
 

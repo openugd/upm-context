@@ -628,21 +628,44 @@ namespace OpenUGD.Tests
         }
 
         [Test]
-        public void ADisposedParentCannotBeUsedAsAParent()
+        public void ABuilderWithADisposedParentIsBornTerminatedAndNeverBuilds()
         {
             var context = Build(NewBuilder());
             context.Dispose();
 
-            Assert.Throws<InvalidOperationException>(() => Context.CreateBuilder(parent: context));
+            var builder = Context.CreateBuilder(parent: context);
+            builder.Services.Add<Probe>(); // registering still works, as on any terminated lifetime
+
+            Assert.IsTrue(builder.Lifetime.IsTerminated,
+                "Born terminated, like Lifetime.DefineNested on a terminated lifetime.");
+            Assert.Catch<OperationCanceledException>(() => RunSync(builder.BuildAsync()));
+            Assert.AreEqual(0, Probe.Constructed);
         }
 
         [Test]
-        public void CreateBuilderOnATerminatedLifetimeThrows()
+        public void ABuilderOnATerminatedLifetimeIsBornTerminatedAndNeverBuilds()
         {
             var definition = NewDefinition("dead");
             definition.Terminate();
 
-            Assert.Throws<InvalidOperationException>(() => Context.CreateBuilder(definition.Lifetime));
+            var builder = Context.CreateBuilder(definition.Lifetime);
+            builder.Services.Add<Probe>();
+
+            Assert.IsTrue(builder.Lifetime.IsTerminated);
+            var error = Assert.Catch<OperationCanceledException>(() => RunSync(builder.BuildAsync()));
+            StringAssert.Contains("ended before BuildAsync", error.Message);
+            Assert.AreEqual(0, Probe.Constructed);
+        }
+
+        [Test]
+        public void ABuilderWithALiveLifetimeButADisposedParentIsBornTerminated()
+        {
+            var parent = Build(NewBuilder("parent"));
+            parent.Dispose();
+
+            var builder = Context.CreateBuilder(NewDefinition("alive").Lifetime, parent);
+
+            Assert.IsTrue(builder.Lifetime.IsTerminated, "A child never outlives its parent, whatever it was given.");
         }
 
         [Test]

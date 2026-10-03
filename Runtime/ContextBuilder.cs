@@ -25,7 +25,9 @@ namespace OpenUGD
     /// <para>
     /// <b>The scope exists from the start.</b> <see cref="Lifetime" /> is created by the constructor, not
     /// by the build, so it can be handed out while registrations are still being written. If the lifetime
-    /// the builder was created on ends during the build, the build is cancelled.
+    /// the builder was created on — or its parent context — ends during the build, the build is cancelled;
+    /// if either had ended before, the builder is born terminated and the build is cancelled before it
+    /// constructs anything.
     /// </para>
     /// </remarks>
     public sealed class ContextBuilder
@@ -36,24 +38,13 @@ namespace OpenUGD
 
         internal ContextBuilder(Lifetime lifetime, Context parent)
         {
-            if (parent != null && parent.Lifetime.IsTerminated)
-            {
-                throw new InvalidOperationException(
-                    "The parent Context has been disposed, so a child could only inherit disposed services.");
-            }
+            // A child ends with its parent whatever lifetime it was given, since it hands out the parent's
+            // services. A lifetime or a parent that has already ended yields a builder born terminated, as
+            // Lifetime.DefineNested does: registering still works, and BuildAsync is cancelled.
+            var parentLifetime = parent != null ? parent.Lifetime : null;
+            _scope = new ContextScope(lifetime ?? parentLifetime ?? Lifetime.Eternal);
+            if (lifetime != null && parentLifetime != null && lifetime != parentLifetime) _scope.Link(parentLifetime);
 
-            var root = lifetime ?? (parent != null ? parent.Lifetime : Lifetime.Eternal);
-
-            // A scope linked to a terminated lifetime would be born terminated. A builder on one could only
-            // ever fail, so say so here, where the dead lifetime was passed in.
-            if (root.IsTerminated)
-            {
-                throw new InvalidOperationException(
-                    "The lifetime passed to Context.CreateBuilder has already terminated, so the context " +
-                    "could never be built. Create the builder from a live lifetime.");
-            }
-
-            _scope = new ContextScope(root);
             _parent = parent;
 
             Services = new ServiceCollection(parent);
@@ -62,13 +53,14 @@ namespace OpenUGD
 
         /// <summary>
         /// The scope the built context will have: a lifetime of its own that ends when the lifetime given to
-        /// <see cref="Context.CreateBuilder" /> ends, already alive and usable before the build.
+        /// <see cref="Context.CreateBuilder" /> ends or, for a child, when its <see cref="Parent" /> does —
+        /// already alive and usable before the build, unless one of those had already ended.
         /// </summary>
         /// <remarks>
         /// <para>
         /// The definition that owns it is never handed out, so it ends only through
         /// <see cref="Context.Dispose" />, through a failed <see cref="BuildAsync" />, or when the lifetime it
-        /// was created on ends.
+        /// was created on or the parent ends.
         /// </para>
         /// <para>
         /// <b>Never while a boot step runs.</b> An end that arrives during the build — that lifetime ending,
@@ -165,8 +157,9 @@ namespace OpenUGD
         /// teardown.
         /// </exception>
         /// <exception cref="OperationCanceledException">
-        /// <paramref name="cancellationToken" /> was cancelled, the lifetime the builder was created on
-        /// ended, or the context was disposed from inside its own build.
+        /// <paramref name="cancellationToken" /> was cancelled; the lifetime the builder was created on ended,
+        /// or the parent context was disposed, before or during the build; or the context was disposed from
+        /// inside its own build.
         /// </exception>
         /// <exception cref="AggregateException">
         /// The build failed <i>and</i> tearing down what had been constructed failed as well. The first
@@ -195,6 +188,16 @@ namespace OpenUGD
 
             try
             {
+                // The scope ended before the build began: the lifetime this builder was created on, or its
+                // parent, has ended since - or had already ended at CreateBuilder.
+                if (token.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(
+                        "The Context's scope ended before BuildAsync was called: the lifetime given to " +
+                        "Context.CreateBuilder has terminated, or the parent Context has been disposed. " +
+                        "Nothing was constructed.", token);
+                }
+
                 if (cancellationToken.CanBeCanceled) registration = cancellationToken.Register(_scope.CancelBuild);
                 token.ThrowIfCancellationRequested();
 

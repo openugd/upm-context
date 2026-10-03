@@ -42,8 +42,9 @@ namespace OpenUGD
 
         internal Lifetime Lifetime => _definition.Lifetime;
 
-        /// Ends this scope when <paramref name="outer"/> ends - at once if it already has.
-        private void Link(Lifetime outer)
+        /// Ends this scope when <paramref name="outer"/> ends - at once if it already has. A scope linked to
+        /// several lifetimes ends with the first of them.
+        internal void Link(Lifetime outer)
         {
             var link = outer.DefineNested(nameof(Context) + " link");
             link.Lifetime.AddAction(End);

@@ -87,6 +87,14 @@ namespace OpenUGD
         /// constructor, and <see cref="ContextBuilder.BuildAsync" /> is the only way a
         /// <see cref="Context" /> comes into existence.
         /// </summary>
+        /// <remarks>
+        /// <b>A lifetime or a parent that has already ended</b> gives a builder that is born terminated, the
+        /// same rule <see cref="OpenUGD.Lifetime.DefineNested" /> follows for a terminated lifetime, so code
+        /// racing a scope's end does not have to test it first: its <see cref="ContextBuilder.Lifetime" /> is
+        /// already terminated, registering on it still works, and <see cref="ContextBuilder.BuildAsync" />
+        /// throws <see cref="OperationCanceledException" /> without constructing anything — exactly what it
+        /// does when the scope ends a moment after this call.
+        /// </remarks>
         /// <param name="lifetime">
         /// The scope the new context lives within. The context gets a lifetime of its own that ends when this
         /// one ends, so disposing the context does not touch this lifetime, while terminating this lifetime
@@ -98,24 +106,23 @@ namespace OpenUGD
         /// <param name="parent">
         /// The context to inherit registrations from, or <c>null</c> for a root. A child resolves whatever
         /// the parent can and shadows any contract it registers itself; inherited singletons stay the
-        /// parent's, built and disposed there.
+        /// parent's, built and disposed there. A child also ends when its parent ends, whatever
+        /// <paramref name="lifetime" /> it was given — before the parent's own services are disposed — so it
+        /// never outlives the services it hands out.
         /// </param>
         /// <returns>
         /// A single-use builder: calling <see cref="ContextBuilder.BuildAsync" /> on it a second time
         /// throws instead of rebuilding.
         /// </returns>
-        /// <exception cref="InvalidOperationException">
-        /// <paramref name="parent" /> has already been disposed, so a child could only inherit disposed
-        /// services; or <paramref name="lifetime" /> has already terminated.
-        /// </exception>
         public static ContextBuilder CreateBuilder(Lifetime lifetime = null, Context parent = null) =>
             new ContextBuilder(lifetime, parent);
 
         /// <summary>
         /// The scope every singleton in this context is tied to: when it terminates, they are disposed and
-        /// this context stops answering. It ends when whatever was passed to <see cref="CreateBuilder" />
-        /// ends, so it can end earlier than that but never later — except that an end arriving while the
-        /// context is still being built waits for the boot steps in flight to finish.
+        /// this context stops answering. It ends when the lifetime passed to <see cref="CreateBuilder" /> ends
+        /// and, for a child, when its parent ends, so it can end earlier than either but never later — except
+        /// that an end arriving while the context is still being built waits for the boot steps in flight to
+        /// finish.
         /// </summary>
         /// <remarks>
         /// This is the lifetime to hand to anything whose life should match the context's — a subscription,

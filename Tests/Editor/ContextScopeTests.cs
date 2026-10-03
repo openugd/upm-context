@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -176,7 +177,157 @@ namespace OpenUGD.Tests
             CollectionAssert.AreEqual(new[] { "disposed" }, log.Entries);
         }
 
+        // ===== a child and its parent (CX-3) =====
+
+        [Test]
+        public void AChildGivenALifetimeOfItsOwnStillEndsWithItsParentAndBeforeItsParentsServices()
+        {
+            var parentDefinition = NewDefinition("parent");
+            var parentBuilder = Context.CreateBuilder(parentDefinition.Lifetime);
+            var log = new Log();
+            parentBuilder.Services.AddInstance(log);
+            parentBuilder.Services.Add<ParentService>();
+            var parent = Build(parentBuilder);
+
+            var childBuilder = Context.CreateBuilder(NewDefinition("unrelated").Lifetime, parent);
+            childBuilder.Services.Add<ChildService>();
+            var child = Build(childBuilder);
+
+            parentDefinition.Terminate();
+
+            Assert.IsTrue(child.Lifetime.IsTerminated, "A child must never outlive the parent it borrows from.");
+            Assert.Throws<ObjectDisposedException>(() => child.Resolve<ChildService>());
+            CollectionAssert.AreEqual(new[] { "child:dispose", "parent:dispose" }, log.Entries,
+                "The child goes first, while the parent's services it holds are still alive.");
+        }
+
+        [Test]
+        public void AChildGivenALifetimeOfItsOwnStillEndsWithThatLifetime()
+        {
+            var parent = Build(NewBuilder("parent"));
+            var own = NewDefinition("own");
+            var child = Build(Context.CreateBuilder(own.Lifetime, parent));
+
+            own.Terminate();
+
+            Assert.IsTrue(child.Lifetime.IsTerminated);
+            Assert.IsFalse(parent.Lifetime.IsTerminated);
+        }
+
+        [Test]
+        public void AParentDisposedBeforeBuildAsyncCancelsTheChildsBuild()
+        {
+            var parentBuilder = NewBuilder("parent");
+            var log = new Log();
+            parentBuilder.Services.AddInstance(log);
+            var parent = Build(parentBuilder);
+
+            var childBuilder = Context.CreateBuilder(NewDefinition("unrelated").Lifetime, parent);
+            childBuilder.Services.Add<LogsConstruction>();
+
+            parent.Dispose();
+
+            Assert.IsTrue(childBuilder.Lifetime.IsTerminated);
+            var error = FailToBuild<OperationCanceledException>(childBuilder);
+            StringAssert.Contains("parent Context has been disposed", error.Message);
+            CollectionAssert.IsEmpty(log.Entries, "Nothing is constructed for a child of a dead parent.");
+        }
+
+        [Test]
+        public void AParentDisposedWhileTheChildBootsCancelsTheChildsBuild()
+        {
+            var parentBuilder = NewBuilder("parent");
+            var log = new Log();
+            parentBuilder.Services.AddInstance(log);
+            var parent = Build(parentBuilder);
+
+            var childBuilder = Context.CreateBuilder(NewDefinition("unrelated").Lifetime, parent);
+            childBuilder.Services.Add<LogsDispose>();
+            childBuilder.Initializers.Add(BootPhase.Awake, async (c, ct) => {
+                parent.Dispose();
+                await Task.Yield();
+                log.Add("step:exit");
+                ct.ThrowIfCancellationRequested();
+            }, "disposes-the-parent");
+
+            FailToBuild<OperationCanceledException>(childBuilder);
+
+            CollectionAssert.AreEqual(new[] { "step:exit", "disposed" }, log.Entries);
+            Assert.IsTrue(childBuilder.Lifetime.IsTerminated);
+        }
+
+        [Test]
+        public void ADisposedChildLeavesNothingBehindInItsParentsLifetimeOrItsOwn()
+        {
+            var parent = Build(NewBuilder("parent"));
+            var own = NewDefinition("own");
+
+            var weak = OnAThreadOfItsOwn(() => BuildAndDisposeAChild(parent, own.Lifetime));
+            for (var i = 0; i < 3; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            Assert.IsFalse(weak.IsAlive,
+                "Neither the parent's lifetime nor the child's own may keep a disposed child's scope reachable.");
+            GC.KeepAlive(parent);
+            GC.KeepAlive(own);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static WeakReference BuildAndDisposeAChild(Context parent, Lifetime own)
+        {
+            var child = RunSync(Context.CreateBuilder(own, parent).BuildAsync());
+            var weak = new WeakReference(child.Lifetime);
+            child.Dispose();
+            return weak;
+        }
+
+        /// Runs the set-up of a retention test on a thread of its own, so that nothing it created is
+        /// referenced from a live stack afterwards: a conservative collector, such as the Boehm GC of Unity's
+        /// editor, treats anything on a live stack that looks like a pointer as a root.
+        private static T OnAThreadOfItsOwn<T>(Func<T> setUp)
+        {
+            var result = default(T);
+            Exception failure = null;
+            var thread = new Thread(() => {
+                try
+                {
+                    result = setUp();
+                }
+                catch (Exception exception)
+                {
+                    failure = exception;
+                }
+            }) { IsBackground = true, Name = "retention-set-up" };
+
+            thread.Start();
+            Assert.IsTrue(thread.Join(30000), "the set-up thread did not finish");
+            if (failure != null) Assert.Fail("the set-up threw: " + failure);
+            return result;
+        }
+
         // ===== fixtures =====
+
+        public sealed class ParentService : IDisposable
+        {
+            private readonly Log _log;
+            public ParentService(Log log) { _log = log; }
+            public void Dispose() => _log.Add("parent:dispose");
+        }
+
+        public sealed class ChildService : IDisposable
+        {
+            private readonly Log _log;
+            public ChildService(Log log, ParentService parent) { _log = log; }
+            public void Dispose() => _log.Add("child:dispose");
+        }
+
+        public sealed class LogsConstruction
+        {
+            public LogsConstruction(Log log) => log.Add("constructed");
+        }
 
         public sealed class KeepsItsToken : IAwakeService
         {

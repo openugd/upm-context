@@ -128,6 +128,9 @@ var windowContext = await wb.BuildAsync();   // completes synchronously: nothing
 windowScope.Terminate();                     // only the window's own singletons are disposed
 ```
 
+A child also ends with its parent, whatever lifetime it was given, so it never hands out the parent's
+services after they are gone.
+
 For a one-off object that is *not* registered and *not* owned by the container, use
 `context.Instantiate<T>()` — constructor-injected, and yours to dispose.
 
