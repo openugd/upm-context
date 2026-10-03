@@ -275,6 +275,34 @@ namespace OpenUGD.Tests
             GC.KeepAlive(own);
         }
 
+        [Test]
+        public void AContextIsReachableOnlyThroughTheLifetimeItWasCreatedOn()
+        {
+            // Review of CX-2: linking the scope instead of nesting it must not root it somewhere else. A
+            // context on a lifetime that nothing else holds is collected with that lifetime, as a nested
+            // scope would be - it is not kept, with every service it built, for the life of the process.
+            var weak = OnAThreadOfItsOwn(BuildOnALifetimeNothingHolds);
+            for (var i = 0; i < 3; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            Assert.IsFalse(weak.IsAlive,
+                "A context must not be reachable from anything but the lifetime it was created on.");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static WeakReference BuildOnALifetimeNothingHolds()
+        {
+            // The vacuous intersection is attached to nothing, so only this frame holds it.
+            var outer = Lifetime.Intersection();
+            var builder = Context.CreateBuilder(outer.Lifetime);
+            builder.Services.Add<KeepsItsToken>();
+            var context = RunSync(StartWithoutContext(() => builder.BuildAsync()));
+            return new WeakReference(context.Lifetime);
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static WeakReference BuildAndDisposeAChild(Context parent, Lifetime own)
         {

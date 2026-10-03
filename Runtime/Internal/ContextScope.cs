@@ -14,7 +14,9 @@ namespace OpenUGD
     /// while a boot step could still be running and using the very services that ending disposes. Linked, an
     /// end that arrives during the build only cancels the build, and the scope ends when the build has
     /// unwound, after every step in flight has finished. Before and after the build an end is immediate, as
-    /// it would be nested, and the boot token is always cancelled before anything is disposed.
+    /// it would be nested, and the boot token is always cancelled before anything is disposed. Like a
+    /// nested definition, the scope hangs off nothing but the lifetimes it is linked to, so a context on a
+    /// lifetime nobody holds is collected with it.
     /// </remarks>
     internal sealed class ContextScope
     {
@@ -34,9 +36,10 @@ namespace OpenUGD
 
         internal ContextScope(Lifetime outer)
         {
-            // Attached to Eternal only because a definition has to hang somewhere; nothing but End and
-            // FailBuild ever terminates it, and terminating it detaches it from Eternal again.
-            _definition = Lifetime.Eternal.DefineNested(nameof(Context));
+            // The vacuous intersection: a definition attached to nothing, so the scope is reachable only
+            // through its links - from the lifetimes it was created on - exactly as a nested definition
+            // would be. Nothing but End and FailBuild ever terminates it.
+            _definition = Lifetime.Intersection();
             Link(outer);
         }
 
