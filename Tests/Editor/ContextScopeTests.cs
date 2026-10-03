@@ -79,6 +79,27 @@ namespace OpenUGD.Tests
         }
 
         [Test]
+        public void DisposingTheContextFromARegistrationFactoryCancelsTheBuildAndTearsDownAfterConstruction()
+        {
+            // Review of CX-2: the docs promise the factory case as well as the boot-step one.
+            var builder = NewBuilder();
+            var log = new Log();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<LogsDispose>();
+            builder.Services.Add<DisposesTheContext>(c => {
+                c.Dispose();
+                return new DisposesTheContext();
+            });
+            builder.Services.Add<LogsConstruction>(); // constructed after the factory has run
+
+            FailToBuild<OperationCanceledException>(builder);
+
+            CollectionAssert.AreEqual(new[] { "constructed", "disposed" }, log.Entries,
+                "Nothing is disposed under the construction still in progress.");
+            Assert.IsTrue(builder.Lifetime.IsTerminated);
+        }
+
+        [Test]
         public void EndingTheScopeDuringAParallelRankWaitsForEveryStepOfTheRank()
         {
             var definition = NewDefinition("boot");
@@ -356,6 +377,8 @@ namespace OpenUGD.Tests
         {
             public LogsConstruction(Log log) => log.Add("constructed");
         }
+
+        public sealed class DisposesTheContext { }
 
         public sealed class KeepsItsToken : IAwakeService
         {
