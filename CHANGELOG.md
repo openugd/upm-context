@@ -139,6 +139,16 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   closes a cycle cannot be honoured, so it is not counted: the services of such a cycle share one rank,
   after everything any of them depends on outside it, and boot in registration order within it; a
   constructor or factory dependency inside the cycle still boots first.
+- **Ending a context's scope while a boot step is running cancels the build first and disposes only after
+  every step in flight has finished** (audit CX-2). The context's lifetime was nested in the lifetime
+  given to `CreateBuilder`, and the build's cancellation was registered on it before any service, so
+  ending that lifetime mid-boot disposed every service — and ran every action the services had
+  registered on the context's `Lifetime` — synchronously, while `AwakeAsync` was still using them, and
+  only then cancelled the token. The context's lifetime is now linked to that lifetime instead of nested
+  in it: an end that arrives during the build, or `Context.Dispose` called from a factory or a boot step,
+  only cancels the build's token, and the build ends the scope once it has unwound. Before and after the
+  build an end is immediate, as before, and teardown keeps its reverse construction order with the
+  services' own lifetime actions interleaved.
 
 ### Known limitations
 

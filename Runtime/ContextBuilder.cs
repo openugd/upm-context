@@ -24,13 +24,13 @@ namespace OpenUGD
     /// </para>
     /// <para>
     /// <b>The scope exists from the start.</b> <see cref="Lifetime" /> is created by the constructor, not
-    /// by the build, so it can be handed out while registrations are still being written — and terminating
-    /// it aborts a build in progress.
+    /// by the build, so it can be handed out while registrations are still being written. If the lifetime
+    /// the builder was created on ends during the build, the build is cancelled.
     /// </para>
     /// </remarks>
     public sealed class ContextBuilder
     {
-        private readonly Lifetime.Definition _definition;
+        private readonly ContextScope _scope;
         private readonly Context _parent;
         private bool _built;
 
@@ -44,8 +44,8 @@ namespace OpenUGD
 
             var root = lifetime ?? (parent != null ? parent.Lifetime : Lifetime.Eternal);
 
-            // DefineNested on a terminated lifetime returns a scope that is already terminated. A builder
-            // on one could only ever fail, so say so here, where the dead lifetime was passed in.
+            // A scope linked to a terminated lifetime would be born terminated. A builder on one could only
+            // ever fail, so say so here, where the dead lifetime was passed in.
             if (root.IsTerminated)
             {
                 throw new InvalidOperationException(
@@ -53,7 +53,7 @@ namespace OpenUGD
                     "could never be built. Create the builder from a live lifetime.");
             }
 
-            _definition = root.DefineNested(nameof(Context));
+            _scope = new ContextScope(root);
             _parent = parent;
 
             Services = new ServiceCollection(parent);
@@ -61,16 +61,24 @@ namespace OpenUGD
         }
 
         /// <summary>
-        /// The scope the built context will have: a fresh definition nested inside the lifetime given to
-        /// <see cref="Context.CreateBuilder" />, already alive and usable before the build.
+        /// The scope the built context will have: a lifetime of its own that ends when the lifetime given to
+        /// <see cref="Context.CreateBuilder" /> ends, already alive and usable before the build.
         /// </summary>
         /// <remarks>
-        /// Terminating this aborts a build in progress and disposes whatever it had constructed, because the
-        /// build's cancellation token is derived from it. The definition that owns it is never handed out,
-        /// so afterwards it ends only through <see cref="Context.Dispose" />, through a failed
-        /// <see cref="BuildAsync" />, or with an ancestor lifetime.
+        /// <para>
+        /// The definition that owns it is never handed out, so it ends only through
+        /// <see cref="Context.Dispose" />, through a failed <see cref="BuildAsync" />, or when the lifetime it
+        /// was created on ends.
+        /// </para>
+        /// <para>
+        /// <b>Never while a boot step runs.</b> An end that arrives during the build — that lifetime ending,
+        /// or <see cref="Context.Dispose" /> called from a factory or a boot step — first cancels the token the
+        /// boot steps were given, and this lifetime ends, disposing what the build had constructed, only once
+        /// every step in flight has finished. Until then it still reads as alive. Before and after the build
+        /// it ends at once, as a nested lifetime would.
+        /// </para>
         /// </remarks>
-        public Lifetime Lifetime => _definition.Lifetime;
+        public Lifetime Lifetime => _scope.Lifetime;
 
         /// <summary>
         /// The context whose registrations the built context will inherit, or <c>null</c> for a root.
@@ -119,7 +127,8 @@ namespace OpenUGD
         /// <see cref="Lifetime" /> is terminated, which disposes exactly what had been constructed, in
         /// reverse construction order, and the original exception is rethrown. No half-built
         /// <see cref="Context" /> is ever returned, and none is reachable from anywhere else, because this
-        /// is the only place one is handed out.
+        /// is the only place one is handed out. The teardown runs only after every boot step in flight has
+        /// finished — a concurrent rank is awaited whole — so it never disposes what a step is still using.
         /// </para>
         /// <para>
         /// <b>It is not necessarily asynchronous.</b> A graph with no boot phases completes synchronously,
@@ -134,8 +143,8 @@ namespace OpenUGD
         /// </remarks>
         /// <param name="cancellationToken">
         /// Checked before each dependency rank of each phase and passed to every boot step, linked with a
-        /// token derived from <see cref="Lifetime" /> so that terminating the scope also aborts the build.
-        /// Cancelling tears down the same way a failure does.
+        /// token cancelled when the scope ends, so that ending the scope also aborts the build. Cancelling
+        /// tears down the same way a failure does.
         /// </param>
         /// <returns>The built context, with every singleton constructed, injected and booted.</returns>
         /// <exception cref="InvalidOperationException">
@@ -153,7 +162,8 @@ namespace OpenUGD
         /// not wrapped: it propagates as it was thrown, after the same teardown.
         /// </exception>
         /// <exception cref="OperationCanceledException">
-        /// <paramref name="cancellationToken" /> or the context's <see cref="Lifetime" /> was cancelled.
+        /// <paramref name="cancellationToken" /> was cancelled, the lifetime the builder was created on
+        /// ended, or the context was disposed from inside its own build.
         /// </exception>
         /// <exception cref="AggregateException">
         /// The build failed <i>and</i> tearing down what had been constructed failed as well. The first
@@ -175,7 +185,7 @@ namespace OpenUGD
             Initializers.Seal();
 
             CancellationTokenSource linked = null;
-            var token = _definition.Lifetime.AsCancellationToken();
+            var token = _scope.BeginBuild();
             if (cancellationToken.CanBeCanceled)
             {
                 linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancellationToken);
@@ -187,7 +197,7 @@ namespace OpenUGD
                 token.ThrowIfCancellationRequested();
 
                 var plan = PlanBuilder.Build(this);
-                var context = plan.CreateContext(_definition, _parent);
+                var context = plan.CreateContext(_scope, _parent);
 
                 plan.ConstructAll(context);
                 plan.InjectAll(context);
@@ -197,13 +207,16 @@ namespace OpenUGD
                 await plan.RunPhasesAsync(context, Initializers.Mode, token);
 
                 token.ThrowIfCancellationRequested();
+                _scope.CompleteBuild(token);
                 return context;
             }
             catch (Exception failure)
             {
+                // Every boot step has finished by now - a concurrent rank is awaited whole - so the teardown
+                // cannot dispose anything a step is still using.
                 try
                 {
-                    _definition.Terminate();
+                    _scope.FailBuild();
                 }
                 catch (Exception teardown)
                 {

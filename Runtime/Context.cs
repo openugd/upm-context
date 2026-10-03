@@ -65,17 +65,17 @@ namespace OpenUGD
     /// </remarks>
     public sealed class Context : IServiceProvider, ILifetimeProvider, IDisposable
     {
-        private readonly Lifetime.Definition _definition;
+        private readonly ContextScope _scope;
         private readonly Lifetime _lifetime;
         private readonly Context _parent;
         private readonly Dictionary<Type, int> _map;
         private readonly object[] _instances;
         private ContextPlan _plan;
 
-        internal Context(Lifetime.Definition definition, Context parent, ContextPlan plan)
+        internal Context(ContextScope scope, Context parent, ContextPlan plan)
         {
-            _definition = definition;
-            _lifetime = definition.Lifetime;
+            _scope = scope;
+            _lifetime = scope.Lifetime;
             _parent = parent;
             _map = plan.Map;
             _instances = plan.Instances;
@@ -88,9 +88,10 @@ namespace OpenUGD
         /// <see cref="Context" /> comes into existence.
         /// </summary>
         /// <param name="lifetime">
-        /// The scope to nest the new context inside. The context gets its own nested
-        /// <see cref="OpenUGD.Lifetime.Definition" />, so disposing the context does not touch this
-        /// lifetime, while terminating this lifetime does dispose the context. Defaults to
+        /// The scope the new context lives within. The context gets a lifetime of its own that ends when this
+        /// one ends, so disposing the context does not touch this lifetime, while terminating this lifetime
+        /// does dispose the context — or, if it is still being built, cancels the build and disposes what it
+        /// constructed once the boot steps in flight have finished. Defaults to
         /// <paramref name="parent" />'s lifetime, or to <see cref="OpenUGD.Lifetime.Eternal" /> when there
         /// is no parent either — which is a process-long scope, so pass one for anything shorter.
         /// </param>
@@ -112,8 +113,9 @@ namespace OpenUGD
 
         /// <summary>
         /// The scope every singleton in this context is tied to: when it terminates, they are disposed and
-        /// this context stops answering. Nested inside whatever was passed to <see cref="CreateBuilder" />,
-        /// so it can end earlier than its parent but never later.
+        /// this context stops answering. It ends when whatever was passed to <see cref="CreateBuilder" />
+        /// ends, so it can end earlier than that but never later — except that an end arriving while the
+        /// context is still being built waits for the boot steps in flight to finish.
         /// </summary>
         /// <remarks>
         /// This is the lifetime to hand to anything whose life should match the context's — a subscription,
@@ -297,6 +299,12 @@ namespace OpenUGD
         /// is safe to simply forget once its scope is defined.
         /// </para>
         /// <para>
+        /// Called on the context still being built — from a registration factory or a boot step — it cancels
+        /// the build instead: <see cref="ContextBuilder.BuildAsync" /> throws
+        /// <see cref="OperationCanceledException" />, and the teardown runs once the boot steps in flight
+        /// have finished, never under them.
+        /// </para>
+        /// <para>
         /// What is <i>not</i> disposed: an instance handed over ready-made, which this context never owned,
         /// even when a factory registration returns it too; and any object an ancestor context holds,
         /// whether inherited from <see cref="Parent" /> or registered here again, which that ancestor still
@@ -313,7 +321,7 @@ namespace OpenUGD
         /// Two or more services threw while disposing, in the order they failed. Every service was still
         /// disposed.
         /// </exception>
-        public void Dispose() => _definition.Terminate();
+        public void Dispose() => _scope.End();
 
         /// <summary>
         /// The BCL service-locator face of <see cref="TryResolve" />, for library code that takes an

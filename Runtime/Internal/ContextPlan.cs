@@ -69,7 +69,7 @@ namespace OpenUGD
         // Build-time only: per claiming slot, the claiming slots of the objects its [Inject] members hold.
         private List<int>[] _held;
 
-        internal Context CreateContext(Lifetime.Definition definition, Context parent)
+        internal Context CreateContext(ContextScope scope, Context parent)
         {
             _state = new byte[Steps.Length];
             _stack = new List<int>();
@@ -79,10 +79,10 @@ namespace OpenUGD
             _held = new List<int>[Steps.Length];
             _parent = parent;
 
-            var context = new Context(definition, parent, this);
+            var context = new Context(scope, parent, this);
 
             if (ContextSlot >= 0) Instances[ContextSlot] = context;
-            if (LifetimeSlot >= 0) Instances[LifetimeSlot] = definition.Lifetime;
+            if (LifetimeSlot >= 0) Instances[LifetimeSlot] = scope.Lifetime;
 
             return context;
         }
