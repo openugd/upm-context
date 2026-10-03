@@ -291,7 +291,8 @@ the next play session. A root context must therefore end with the play session.
   context whose scope a MonoBehaviour ends there, as in the quick start, ends with the session.
 - **`com.openugd.corelib`'s `PlaySession.Lifetime`** (namespace `OpenUGD.Core`) is the recommended root in a
   Unity project. It ends when the application quits or play mode is exited, and starts afresh with the next
-  session. corelib's `ContextBehaviour` already roots its contexts in it.
+  session. corelib's `ContextBehaviour` nests its own scope in it, so a context built on that scope ends with
+  the session too.
 - **Without corelib**, end the root on `Application.quitting`:
 
 ```csharp
@@ -535,7 +536,7 @@ constructor that takes dependencies is still removed. Put `[Inject]` on that con
 The package ships no `link.xml`, because Unity reads `link.xml` only from a project's `Assets` folder,
 never from a package. If stripping leaves a type with no public constructor at all, the build reports
 that it "has no public instance constructor" and names stripping as a possible cause. If stripping
-removes only some of them, no error names stripping: the container uses the greediest public constructor
+removes only some of them, no error names stripping: the container uses the widest public constructor
 that is left and can be satisfied, which may not be the one you meant. So keep the constructors as
 described above rather than wait for the error.
 
@@ -546,8 +547,9 @@ executing the stripped assemblies; no IL2CPP player has been built with it yet.
 
 Registration and the build are single-threaded setup code: `ServiceCollection` is not thread-safe. A built
 context is: every service already exists, so resolving a registered contract with `TryResolve` or `Resolve`
-is a dictionary lookup and an array read, with no lock and no allocation. `Instantiate` and `Inject` may also be called from any thread, but they
-use reflection on every call (type metadata is cached), so keep them out of hot loops.
+is a dictionary lookup and an array read, with no lock and no allocation. `Instantiate` and `Inject` may also
+be called from any thread, but they use reflection on every call (type metadata is cached), so keep them out
+of hot loops.
 
 ### What it does not do
 
@@ -578,7 +580,7 @@ All types are in the `OpenUGD` namespace.
 | `InitializerCollection` | `Add(phase, step, name)`, `Mode` | Boot steps that are not services, and the startup mode. |
 | `BootPhase` | `Awake`, `Initialize` | The two phases, in order. |
 | `StartupMode` | `Sequential` (default), `Parallel` | How the services of one dependency rank boot. |
-| `ContextException` | `Path` | A failed build, resolve, activation or boot step. `Path` is the dependency chain, empty when there is none. |
+| `ContextException` | `Path`; constructors `(message)`, `(message, innerException)`, `(message, path)`, `(message, path, innerException)` | A failed build, resolve, activation or boot step. `Path` is the dependency chain, empty when there is none. |
 | `InjectAttribute` | `Optional` | `[Inject]` on a field, property or constructor; `[Inject(Optional = true)]` on a member. |
 | `ILifetimeProvider` | `Lifetime` | Anything that carries a scope; `Context` implements it. |
 
@@ -622,8 +624,9 @@ need the engine; the rest are plain .NET and use no engine API.
 `com.openugd.context` had no release before 2.0.0. It replaces two published packages:
 
 - the context layer of `com.openugd.corelib` 0.6.x — `ContextStartup`, `Service`, `IContext`,
-  `ContextFactoryComponent` and the service builder. corelib 2.0 depends on this package instead; of that
-  layer it keeps only the Unity side, `ContextBehaviour` and `PlaySession`;
+  `ContextFactoryComponent` and the service builder. corelib 2.0 depends on this package instead and keeps
+  only a Unity boundary for it, both new in 2.0: `ContextBehaviour`, which replaces `ContextFactoryComponent`,
+  and `PlaySession`;
 - `com.openugd.dependency.injection` 0.1.x — `Injector` and its resolvers. It gets no further releases; its
   published versions stay on OpenUPM.
 
@@ -632,10 +635,10 @@ package: code that sees both and uses `[Inject]` fails with `CS0433`.
 
 ### What behaves differently
 
-- **The boot is awaitable and its failure is observable.** Building is the only way to get a context —
-  `BuildAsync`, or `Build` for a boot that completes synchronously — so a failed startup can no longer be
-  discarded. 0.6.x started the boot with `_ = Install(...)` in a constructor
-  and lost every exception.
+- **A failed boot can no longer be discarded.** Building is the only way to get a context — `BuildAsync`, or
+  `Build` for a boot that completes synchronously — so a failed startup surfaces where you build. In 0.6.x the
+  context object existed before its boot, which was usually started from its constructor with
+  `_ = Install(...)`, and every exception of the boot was lost.
 - **A missing binding is an error, not `null`.** `Injector.Resolve` returned `null`, which turned into a
   `NullReferenceException` later, in unrelated code. Where an absence is meaningful, say so once at the member
   with `[Inject(Optional = true)]`, or use `TryResolve`.
@@ -764,6 +767,68 @@ public static class Game
 
 ### From dependency.injection 0.1.x
 
+Before:
+
+<!-- upm-tools: no-compile (the dependency.injection 0.1.x API, removed in 2.0) -->
+```csharp
+public sealed class SaveService : ISaveService
+{
+    public SaveService(IClock clock) { }
+}
+
+public sealed class Hud
+{
+    [Inject] private ISaveService _save;   // left null, silently, if ISaveService is not registered
+}
+
+public static class Composition
+{
+    public static Injector Build(Hud hud)
+    {
+        var injector = new Injector();
+        injector.ToValue<IClock>(new SystemClock());
+        injector.ToSingleton<ISaveService, SaveService>();   // constructed when first asked for: here, by Inject
+        injector.Inject(hud);
+        return injector;
+    }
+}
+```
+
+After:
+
+```csharp
+using System.Threading.Tasks;
+using OpenUGD;
+
+public interface IClock { }
+public sealed class SystemClock : IClock { }
+public interface ISaveService { }
+
+public sealed class SaveService : ISaveService
+{
+    public SaveService(IClock clock) { }
+}
+
+public sealed class Hud
+{
+    [Inject] private ISaveService _save;   // Inject throws if ISaveService is not registered
+}
+
+public static class Composition
+{
+    public static async Task<Context> BuildAsync(Lifetime lifetime, Hud hud)
+    {
+        var builder = Context.CreateBuilder(lifetime);
+        builder.Services.AddInstance<IClock>(new SystemClock());
+        builder.Services.Add<SaveService>().As<ISaveService>();
+
+        var context = await builder.BuildAsync();   // validates the graph and constructs SaveService, or throws
+        context.Inject(hud);
+        return context;
+    }
+}
+```
+
 | 0.1.x (`Injector`) | 2.0 (`Context`) | What changes |
 | --- | --- | --- |
 | `new Injector()`, `new Injector(parent)` | `Context.CreateBuilder(lifetime)`, `Context.CreateBuilder(lifetime, parent)`, then `await builder.BuildAsync()` | Register first, build once, then resolve. A child sees its parent's registrations and shadows them with its own. |
@@ -777,7 +842,7 @@ public static class Game
 | `[Inject] Lazy<T>` | `[Inject] T` | `OpenUGD.Lazy<T>` is gone. Members are filled after every constructor has run, so two services can hold each other through `[Inject]` members. |
 | a dependency on `IInjector`, `IResolve` or `IInject` | a constructor parameter of type `Context` (or `Lifetime`) | Both are available in every context without being registered. |
 | `Register(type, resolver)`, `UnRegister(type)`, a custom `IResolver` | `builder.Services.Add(type, c => ...)` | No custom resolvers and no unregistering: a built context is fixed. Override a registration in a child context instead. |
-| `[Inject]` on a method | — | A compile error now: the attribute applies to constructors, fields and properties. |
+| `[Inject]` on a method | — | A compile error now: the attribute applies to constructors, fields and properties. 0.1.x accepted it on a method but `Inject` never called the method, so removing it changes no behaviour. |
 
 ## Versioning
 

@@ -59,7 +59,7 @@ Not carried over from the layer this package replaces.
   `ContextBuilder`.
 - Custom resolvers, `UnRegister` and `OpenUGD.Lazy<T>`.
 - `ContextServiceBuilderOptions`: register a settings object with `AddInstance`.
-- `[Inject]` on methods.
+- `[Inject]` on methods: now a compile error. 0.1.x accepted it there but never called the method.
 
 ### Changed during the 2.0.0 cycle
 
