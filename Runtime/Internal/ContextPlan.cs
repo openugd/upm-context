@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading;
@@ -16,6 +17,9 @@ namespace OpenUGD
         internal int[] ArgumentSlots;
         internal string Site;
         internal int Rank;
+
+        /// Registered with AddInstance: the slot is filled before the build and the object is the caller's.
+        internal bool HandedOver;
     }
 
     internal sealed class BootStep
@@ -46,10 +50,27 @@ namespace OpenUGD
         private List<int> _stack;
         private int _current = -1;
 
+        // Build-time only: who holds each object. One object can fill several slots - a forwarding factory
+        // Add<I>(c => c.Resolve<X>()), one object handed to AddInstance twice, a factory returning an
+        // AddInstance object, a child re-registering what its parent holds - so ownership is decided per
+        // object, by reference, never per slot. The first slot an object fills claims it; every later slot
+        // holding it points at that claim, and the object is injected, booted and, if this context made it,
+        // disposed once. An object an ancestor context holds, and this context's own Context and Lifetime,
+        // are Foreign: never injected, booted or disposed here.
+        private const int Foreign = -1;
+        private Dictionary<object, int> _claims;
+        private int[] _owner;
+        private HashSet<object> _ancestors;
+        private Context _parent;
+
         internal Context CreateContext(Lifetime.Definition definition, Context parent)
         {
             _state = new byte[Steps.Length];
             _stack = new List<int>();
+            _claims = new Dictionary<object, int>(IdentityComparer.Instance);
+            _owner = new int[Steps.Length];
+            for (var i = 0; i < _owner.Length; i++) _owner[i] = Foreign;
+            _parent = parent;
 
             var context = new Context(definition, parent, this);
 
@@ -61,6 +82,13 @@ namespace OpenUGD
 
         internal void ConstructAll(Context context)
         {
+            // Objects handed over with AddInstance are claimed first, in registration order, so a factory that
+            // returns one later finds it claimed and never takes ownership of it.
+            for (var i = 0; i < Steps.Length; i++)
+            {
+                if (Steps[i].HandedOver) Claim(context, i, Instances[i], false);
+            }
+
             for (var i = 0; i < Steps.Length; i++) EnsureConstructed(context, i);
         }
 
@@ -138,13 +166,59 @@ namespace OpenUGD
             _state[slot] = 2;
             Instances[slot] = instance;
 
+            // A constructor always returns a new object, which nobody can hold yet; a factory may return
+            // anything, including an object that already has an owner.
+            Claim(context, slot, instance, step.Factory == null);
+
+            return instance;
+        }
+
+        /// Records who holds <paramref name="instance"/>, now in <paramref name="slot"/>, and makes this
+        /// context responsible for disposing it if - and only if - this slot is the first to hold it, this
+        /// context produced it, and nobody else owns it.
+        private void Claim(Context context, int slot, object instance, bool fresh)
+        {
+            int owner;
+            if (!fresh && _claims.TryGetValue(instance, out owner))
+            {
+                _owner[slot] = owner;
+                return;
+            }
+
+            owner = !fresh && IsForeign(context, instance) ? Foreign : slot;
+            _claims[instance] = owner;
+            _owner[slot] = owner;
+
+            if (owner != slot || Steps[slot].HandedOver) return;
+
             // Registered here, one at a time, which is what makes a failed build atomic: terminating the
             // lifetime disposes exactly what was constructed before the failure, in reverse construction
             // order, because Lifetime runs its actions LIFO.
             var disposable = instance as IDisposable;
             if (disposable != null) context.Lifetime.AddAction(disposable.Dispose);
+        }
 
-            return instance;
+        private bool IsForeign(Context context, object instance)
+        {
+            if (ReferenceEquals(instance, context) || ReferenceEquals(instance, context.Lifetime)) return true;
+            if (_parent == null) return false;
+
+            if (_ancestors == null)
+            {
+                // Every ancestor, not just the parent: a child copies only the contracts it does not shadow, so
+                // an object a grandparent holds may be missing from the parent's table.
+                _ancestors = new HashSet<object>(IdentityComparer.Instance);
+                for (var ancestor = _parent; ancestor != null; ancestor = ancestor.Parent)
+                {
+                    var table = ancestor.Table;
+                    for (var i = 0; i < table.Length; i++)
+                    {
+                        if (table[i] != null) _ancestors.Add(table[i]);
+                    }
+                }
+            }
+
+            return _ancestors.Contains(instance);
         }
 
         internal void InjectAll(Context context)
@@ -154,6 +228,10 @@ namespace OpenUGD
             // a subtype with extra members is the one case that can still fail, and it fails loudly.
             for (var i = 0; i < Steps.Length; i++)
             {
+                // Once per object, under the registration that claimed it; never an object of an ancestor,
+                // which that ancestor injected from its own registrations.
+                if (_owner[i] != i) continue;
+
                 var instance = Instances[i];
                 var type = instance.GetType();
 
@@ -197,9 +275,12 @@ namespace OpenUGD
             }
 
             // Enrolment is by what the instance actually is, not by the registered type, so a factory
-            // returning a subtype is still enrolled.
+            // returning a subtype is still enrolled. Once per object, at the rank of the registration that
+            // claimed it, and never for an object an ancestor holds - that one booted with its own context.
             for (var i = 0; i < Steps.Length; i++)
             {
+                if (_owner[i] != i) continue;
+
                 var instance = Instances[i];
                 var rank = Steps[i].Rank;
                 var name = Diagnostics.Display(instance.GetType());
@@ -415,5 +496,16 @@ namespace OpenUGD
                 "member injection happens after every service exists, so it is allowed to be cyclic.",
                 path);
         }
+    }
+
+    /// Equality by reference, whatever the type says: two registrations hold "the same object" only if they
+    /// hold the very same instance, however its Equals and GetHashCode are written.
+    internal sealed class IdentityComparer : IEqualityComparer<object>
+    {
+        internal static readonly IdentityComparer Instance = new IdentityComparer();
+
+        public new bool Equals(object x, object y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
 }

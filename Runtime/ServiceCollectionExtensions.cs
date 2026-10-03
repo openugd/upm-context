@@ -91,6 +91,13 @@ namespace OpenUGD
         /// fine and is fully supported: member injection and boot-phase enrolment both go by what the object
         /// actually is, not by what it was registered as.
         /// </para>
+        /// <para>
+        /// <b>Returning an object that already has an owner is fine too.</b> A forwarding factory,
+        /// <c>Add&lt;IFoo&gt;(c =&gt; c.Resolve&lt;Foo&gt;())</c>, returns another registration's object; a
+        /// factory may also return an <c>AddInstance</c> object, or an object a parent context holds. That
+        /// object keeps its owner: it is not injected, booted or disposed a second time, an
+        /// <c>AddInstance</c> object is never disposed, and a parent's object is left entirely to the parent.
+        /// </para>
         /// </remarks>
         /// <typeparam name="TImpl">The registered type, and the registration's first contract. What the
         /// factory returns must be assignable to it.</typeparam>
@@ -135,15 +142,18 @@ namespace OpenUGD
         /// </para>
         /// <para>
         /// <b>The context does not own it.</b> The instance is never constructed and never disposed here,
-        /// even when it implements <see cref="IDisposable"/> — handing over an object you already hold means
-        /// its lifetime is someone else's, and disposing it with a scope that merely borrowed it would be
-        /// the wrong default. Tie it to a <see cref="Lifetime"/> yourself if it needs one.
+        /// even when it implements <see cref="IDisposable"/>, and even when a factory registration returns it
+        /// as well — handing over an object you already hold means its lifetime is someone else's, and
+        /// disposing it with a scope that merely borrowed it would be the wrong default. Tie it to a
+        /// <see cref="Lifetime"/> yourself if it needs one.
         /// </para>
         /// <para>
-        /// <b>It is still injected into.</b> Members marked <see cref="InjectAttribute"/> on the instance
-        /// are filled during the build, by its run-time type, exactly as for a service the container built.
-        /// A missing binding for a non-optional member fails the build even though the object was handed
-        /// over ready-made.
+        /// <b>It is still injected into</b>, and booted if it implements a boot phase — once, however many
+        /// registrations name it. Members marked <see cref="InjectAttribute"/> on the instance are filled
+        /// during the build, by its run-time type, exactly as for a service the container built. A missing
+        /// binding for a non-optional member fails the build even though the object was handed over
+        /// ready-made. The exception is an object a parent context already holds: the parent injected and
+        /// booted it, so a child hands it out and leaves it alone.
         /// </para>
         /// </remarks>
         /// <typeparam name="TContract">

@@ -415,6 +415,7 @@ namespace OpenUGD
                         Factory = entry.Factory,
                         Constructor = node.Constructor,
                         Site = entry.Site,
+                        HandedOver = entry.Instance != null,
                         ArgumentSlots = new int[entry.Factory == null && entry.Instance == null
                             ? node.Parameters.Length
                             : 0]

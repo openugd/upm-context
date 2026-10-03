@@ -50,6 +50,15 @@ namespace OpenUGD
     /// and are not disposed here; nor is anything inherited from a parent, which the parent still owns.
     /// </para>
     /// <para>
+    /// <b>Ownership goes by the object, not by the registration.</b> One object may answer to several
+    /// registrations — a factory that forwards to another service, <c>Add&lt;IFoo&gt;(c =&gt;
+    /// c.Resolve&lt;Foo&gt;())</c>; the same object handed to <c>AddInstance</c> twice; a factory returning an
+    /// <c>AddInstance</c> object; a child registering an object its parent already holds. Such an object is
+    /// injected, booted and disposed at most once, by the context that first holds it, and only if that
+    /// context made it: an <c>AddInstance</c> object is never disposed, and an object of any ancestor context
+    /// is never injected, booted or disposed by a child, which only hands it out.
+    /// </para>
+    /// <para>
     /// <b>Engine-free.</b> Nothing in this file references <c>UnityEngine</c>. A context can be built and
     /// asserted on in a plain unit test, a console app or a headless build.
     /// </para>
@@ -289,8 +298,10 @@ namespace OpenUGD
         /// </para>
         /// <para>
         /// What is <i>not</i> disposed: an instance handed over ready-made, which this context never owned,
-        /// and anything inherited from <see cref="Parent" />, which the parent still owns and will dispose
-        /// with its own lifetime. Child contexts nested in this one are terminated with it.
+        /// even when a factory registration returns it too; and any object an ancestor context holds,
+        /// whether inherited from <see cref="Parent" /> or registered here again, which that ancestor still
+        /// owns and will dispose with its own lifetime. An object registered here under several contracts or
+        /// registrations is disposed once. Child contexts nested in this one are terminated with it.
         /// </para>
         /// </remarks>
         /// <exception cref="Exception">
@@ -324,6 +335,10 @@ namespace OpenUGD
         }
 
         internal void EndBuild() => _plan = null;
+
+        /// Every object this context hands out, by slot - its own, its automatic Context and Lifetime, and
+        /// what it inherited. Read while building a child, to tell an ancestor's objects from the child's.
+        internal object[] Table => _instances;
 
         internal bool CanResolve(Type contract) => _map.ContainsKey(contract);
 

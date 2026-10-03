@@ -31,8 +31,9 @@ namespace OpenUGD
     /// <b>Every registration is a singleton of its context</b>, constructed once during the build and shared
     /// by every contract it answers to, so adding contracts with <see cref="Registration.As"/> never
     /// multiplies instances. A service that implements <see cref="IDisposable"/> is disposed when the
-    /// context's <see cref="Lifetime"/> terminates, in reverse construction order — with one exception, an
-    /// instance handed over ready-made, which the context does not own and never disposes.
+    /// context's <see cref="Lifetime"/> terminates, in reverse construction order, and once even if several
+    /// registrations return it — except an instance handed over ready-made, which the context does not own
+    /// and never disposes, and an object a parent context holds, which stays the parent's.
     /// </para>
     /// <para>
     /// <b>Sealed once the builder has built.</b> Registering afterwards throws instead of silently doing

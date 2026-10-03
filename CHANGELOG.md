@@ -121,6 +121,16 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   startup modes** (audit CX-10). They all shared one rank, so under `StartupMode.Parallel` they ran
   concurrently although a later step may well rely on an earlier one and nothing in a lambda says so.
   Each now has a rank of its own, still ahead of every service of its phase.
+- **An object that answers to several registrations is injected, booted and disposed at most once, and a
+  child never disposes, injects or boots an object its parent holds** (audit CX-1). Ownership was decided
+  per registration, so the .NET-idiomatic forwarding factory `Add<IFoo>(c => c.Resolve<Foo>())` disposed
+  `Foo` twice and ran its boot phases twice; one object handed to `AddInstance` under two contracts was
+  injected and booted twice; a factory returning an `AddInstance` object made the context dispose an
+  object it had been told it did not own; and a child that registered its parent's object again
+  re-injected it with the child's own services, booted it again, and disposed it when the child ended.
+  Ownership now goes by the object, compared by reference: the first registration that holds an object
+  claims it, an `AddInstance` object is never disposed, and an object any ancestor context holds is
+  never injected, booted or disposed by a descendant.
 
 ### Known limitations
 
