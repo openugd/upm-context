@@ -237,8 +237,8 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   constructor — so one slow read stalled every other thread's lookup. Hits are now lock-free, and a type
   is read outside any lock.
 - **Nothing encourages blocking on `BuildAsync` any more, and `Build` replaces it** (audit CX-20).
-  The docs said a graph without asynchronous steps "completes synchronously" and the README and tests
-  read the result with `GetAwaiter().GetResult()`, which deadlocks under a single-threaded
+  The `BuildAsync` docs and the README said a graph without asynchronous steps "completes synchronously",
+  and tests read the result with `GetAwaiter().GetResult()`, which deadlocks under a single-threaded
   synchronization context — Unity's main thread — as soon as one step really awaits. The docs now say to
   await it and never block. The new `ContextBuilder.Build()` runs the build on the calling thread and,
   if a boot step returns an unfinished task, throws a `ContextException` naming the step instead of

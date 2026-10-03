@@ -278,7 +278,7 @@ silent and nothing is reflective about it.
 | `Registration` | What `Add` returns. `As(Type)` adds a contract, `AsElementOf(Type)` contributes to a list. A struct — no allocation. |
 | `InitializerCollection` | Boot steps that are not services. `Mode` is Sequential by default; Parallel is opt-in. |
 | `IAwakeService`, `IInitializeService` | Opt-in async boot phases. Services enrol automatically. |
-| `ContextException` | What a failed build, resolve or activation throws. `Path` carries the dependency chain. Bad arguments, a disposed context and cancellation throw the standard exceptions. |
+| `ContextException` | What a failed build, resolve or activation throws. `Path` carries the dependency chain. Misuse (a bad argument, a disposed context, a second build), cancellation, and a failed build whose teardown fails too throw the standard exceptions. |
 | `[Inject]` | Field/property injection, for objects the container did not construct. |
 | `[Inject(Optional = true)]` | Same, but injected only if registered. The member is left alone otherwise. |
 
