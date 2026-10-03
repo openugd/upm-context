@@ -16,6 +16,20 @@ namespace OpenUGD.Tests
     [TestFixture]
     public class ContextSynchronousBuildTests : ContextFixture
     {
+        private SynchronizationContext _previous;
+
+        /// No synchronization context unless a test installs one: under Unity's, a continuation these tests
+        /// wait for would be queued to the very thread that is waiting.
+        [SetUp]
+        public void ClearSynchronizationContext()
+        {
+            _previous = SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(null);
+        }
+
+        [TearDown]
+        public void RestoreSynchronizationContext() => SynchronizationContext.SetSynchronizationContext(_previous);
+
         private static string ThisFile([CallerFilePath] string file = null) => file;
 
         private static int Line([CallerLineNumber] int line = 0) => line;
