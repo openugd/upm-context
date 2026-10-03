@@ -208,6 +208,14 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   them, so which one is tried and named first no longer varies between runs (`Array.Sort` is unstable and
   did reorder them on .NET's runtime once a type had more than 16 constructors).
 
+- **A `MonoBehaviour`, `ScriptableObject` or other `UnityEngine.Object` is never constructed by
+  reflection** (audit CX-27). `Add<T>()` and `Instantiate<T>()` called its constructor, which in Unity
+  only logs a warning and yields an object with no native counterpart. Both now refuse such a type —
+  recognised by the full name of a base type, since the package has no engine reference — and say what to
+  do instead: register the object Unity made with `AddInstance`, or a factory that creates it the Unity
+  way; for `Instantiate`, create it and pass it to `Context.Inject`. (The other half of CX-27, engine
+  objects' properties leaking into configuration, left with the configuration system.)
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was

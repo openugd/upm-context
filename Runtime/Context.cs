@@ -210,7 +210,9 @@ namespace OpenUGD
         /// </remarks>
         /// <param name="type">
         /// The concrete type to construct. Interfaces, abstract classes, value types, arrays and open
-        /// generics are rejected — there is no binding step here, this is the type that gets built.
+        /// generics are rejected — there is no binding step here, this is the type that gets built — and so
+        /// is a type deriving from <c>UnityEngine.Object</c>, which only Unity can create: create it the
+        /// Unity way and pass it to <see cref="Inject" />.
         /// </param>
         /// <param name="args">
         /// Values to use in place of resolved services. Each constructor parameter takes the first unused

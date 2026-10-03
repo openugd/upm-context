@@ -124,8 +124,9 @@ namespace OpenUGD
         /// a choice.
         /// </para>
         /// </remarks>
-        /// <typeparam name="T">The concrete type to construct. An interface, an abstract type, a value type
-        /// or an open generic is a failure, not a resolution.</typeparam>
+        /// <typeparam name="T">The concrete type to construct. An interface, an abstract type, a value type,
+        /// an open generic or a type deriving from <c>UnityEngine.Object</c> is a failure, not a
+        /// resolution.</typeparam>
         /// <param name="context">The context to resolve the dependencies from.</param>
         /// <returns>The new instance.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="context"/> is <c>null</c>.</exception>

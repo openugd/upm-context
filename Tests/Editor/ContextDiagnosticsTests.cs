@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using NUnit.Framework;
 
@@ -262,7 +263,82 @@ namespace OpenUGD.Tests
             Assert.AreEqual(0, sorted[sorted.Length - 1].GetParameters().Length);
         }
 
+        // ===== engine objects =====
+
+        [Test]
+        public void ATypeDerivingFromUnityEngineObjectIsNeverConstructedByReflection()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add(FakeEngine.Behaviour); var line = Line();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("'Game.FakeBehaviour' cannot be activated because it derives from UnityEngine.Object",
+                error.Message);
+            StringAssert.Contains("registered at " + ThisFile() + ":" + line, error.Message);
+            StringAssert.Contains("AddInstance, or a factory", error.Message);
+            StringAssert.DoesNotContain("new T(", error.Message, "A constructor call is exactly what cannot work.");
+        }
+
+        [Test]
+        public void InstantiateRefusesATypeDerivingFromUnityEngineObject()
+        {
+            var context = Build(NewBuilder());
+
+            var error = Assert.Throws<ContextException>(() => context.Instantiate(FakeEngine.Behaviour));
+
+            StringAssert.Contains("derives from UnityEngine.Object", error.Message);
+            StringAssert.Contains("Context.Inject", error.Message);
+        }
+
+        [Test]
+        [Category("RequiresUnity")]
+        public void ARealMonoBehaviourOrScriptableObjectIsNeverConstructedByReflection()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<RealBehaviour>();
+            builder.Services.Add<RealSettings>();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("'" + Name(typeof(RealBehaviour)) + "' cannot be activated", error.Message);
+            StringAssert.Contains("'" + Name(typeof(RealSettings)) + "' cannot be activated", error.Message);
+
+            var context = Build(NewBuilder("instantiate"));
+            Assert.Throws<ContextException>(() => context.Instantiate<RealSettings>());
+        }
+
         // ===== fixtures =====
+
+        /// Types named as Unity's are, made at run time, so a headless test can have a UnityEngine.Object
+        /// subclass without the engine: UnityEngine.Object, UnityEngine.Component, Game.FakeBehaviour.
+        private static class FakeEngine
+        {
+            private static Type _behaviour;
+
+            internal static Type Behaviour => _behaviour ?? (_behaviour = Emit());
+
+            private static Type Emit()
+            {
+                var assembly = AssemblyBuilder.DefineDynamicAssembly(
+                    new AssemblyName("OpenUGD.Tests.FakeEngine"), AssemblyBuilderAccess.Run);
+                var module = assembly.DefineDynamicModule("OpenUGD.Tests.FakeEngine");
+
+                Type parent = null;
+                foreach (var name in new[] { "UnityEngine.Object", "UnityEngine.Component", "Game.FakeBehaviour" })
+                {
+                    var type = module.DefineType(name, TypeAttributes.Public | TypeAttributes.Class, parent);
+                    type.DefineDefaultConstructor(MethodAttributes.Public);
+                    parent = type.CreateTypeInfo().AsType();
+                }
+
+                return parent;
+            }
+        }
+
+        public sealed class RealBehaviour : UnityEngine.MonoBehaviour { }
+
+        public sealed class RealSettings : UnityEngine.ScriptableObject { }
 
         public interface IGauge { }
 

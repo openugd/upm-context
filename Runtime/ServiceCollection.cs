@@ -98,9 +98,10 @@ namespace OpenUGD
         /// </remarks>
         /// <param name="implementation">
         /// The type to construct, and the registration's first contract. Not checked here: without a
-        /// <paramref name="factory"/>, an interface, an abstract or an open generic type is reported by the
-        /// build, together with the site below. With one, nothing is constructed by reflection, so an
-        /// interface is a perfectly good registration.
+        /// <paramref name="factory"/>, an interface, an abstract or an open generic type, or a type deriving
+        /// from <c>UnityEngine.Object</c> — which only Unity can create — is reported by the build, together
+        /// with the site below. With one, nothing is constructed by reflection, so an interface is a
+        /// perfectly good registration.
         /// </param>
         /// <param name="factory">
         /// Called once during the build instead of invoking a constructor, with the <see cref="Context"/>

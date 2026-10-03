@@ -81,7 +81,26 @@ namespace OpenUGD
             if (type.IsArray) return "it is an array type";
             if (type.IsGenericTypeDefinition) return "it is an open generic type";
             if (type.ContainsGenericParameters) return "it has unbound generic parameters";
+            if (IsEngineObject(type))
+            {
+                return "it derives from UnityEngine.Object - a MonoBehaviour, a ScriptableObject or another " +
+                       "engine object - which only Unity can create; one made by calling its constructor has no " +
+                       "native object behind it";
+            }
+
             return null;
+        }
+
+        /// Whether <paramref name="type"/> is a UnityEngine.Object, told by the name of a base type: this
+        /// assembly has no engine reference, so the type itself cannot be named.
+        internal static bool IsEngineObject(Type type)
+        {
+            for (var current = type; current != null; current = current.BaseType)
+            {
+                if (current.FullName == "UnityEngine.Object") return true;
+            }
+
+            return false;
         }
 
         private static TypeMetadata Read(Type type)
@@ -259,7 +278,11 @@ namespace OpenUGD
             if (reason != null)
             {
                 throw new ContextException(
-                    "Cannot instantiate '" + Diagnostics.Display(type) + "': " + reason + ".");
+                    "Cannot instantiate '" + Diagnostics.Display(type) + "': " + reason + "." +
+                    (IsEngineObject(type)
+                        ? "\n      Create it the Unity way - AddComponent, Object.Instantiate or " +
+                          "ScriptableObject.CreateInstance - and pass it to Context.Inject to fill its [Inject] members."
+                        : string.Empty));
             }
 
             var metadata = GetMetadata(type);

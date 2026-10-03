@@ -174,7 +174,11 @@ namespace OpenUGD
                     _errors.Add(
                         "'" + Diagnostics.Display(type) + "' cannot be activated because " + reason + "." +
                         Diagnostics.Where(entry.Site) +
-                        "\n      Register a concrete type, or a factory: Add<T>(c => new T(...)).");
+                        (Activation.IsEngineObject(type)
+                            ? "\n      Register the object Unity made with AddInstance, or a factory that makes it " +
+                              "the Unity way: Add<T>(c => gameObject.AddComponent<T>()), " +
+                              "Add<T>(c => ScriptableObject.CreateInstance<T>())."
+                            : "\n      Register a concrete type, or a factory: Add<T>(c => new T(...))."));
                     return;
                 }
 
