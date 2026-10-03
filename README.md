@@ -271,8 +271,7 @@ public static class Windows
 ```
 
 Terminating `windowScope` disposes only the window's own singletons. A singleton the parent registered is
-always built and owned by the parent, even when a child asks for it first, so it never becomes captive in a
-shorter scope. A child also **ends with its parent**, whatever scope it was given — before the parent's own
+built and owned by the parent, and a child only hands it out, so it never becomes captive in a shorter scope. A child also **ends with its parent**, whatever scope it was given — before the parent's own
 services are disposed — so it never hands out a parent's service after that service is gone. `CreateBuilder`
 on a lifetime or a parent that has already ended does not throw: it gives a builder whose build throws
 `OperationCanceledException` before constructing anything.
