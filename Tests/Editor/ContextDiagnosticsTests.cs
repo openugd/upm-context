@@ -250,6 +250,19 @@ namespace OpenUGD.Tests
             StringAssert.DoesNotContain(".As<Object>()", error.Message);
         }
 
+        [Test]
+        public void ASuggestionNamesAGenericContractTheWayCSharpWritesIt()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<GaugeStore>();
+            builder.Services.Add<NeedsStore>();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("Add .As<IStore<Gauge>>() to its registration.", error.Message,
+                "A suggestion that can be pasted, not the metadata name IStore`1.");
+        }
+
         // ===== Instantiate =====
 
         [Test]
@@ -474,6 +487,15 @@ namespace OpenUGD.Tests
         }
 
         public sealed class Box<T> { }
+
+        public interface IStore<T> { }
+
+        public sealed class GaugeStore : IStore<Gauge> { }
+
+        public sealed class NeedsStore
+        {
+            public NeedsStore(IStore<Gauge> store) { }
+        }
 
         public sealed class ManyConstructors
         {

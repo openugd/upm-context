@@ -59,7 +59,7 @@ namespace OpenUGD
                     }
 
                     return "'" + Display(candidate) + "' is registered and does implement '" +
-                           Display(missing) + "', but was not registered as it. Add .As<" + name +
+                           Display(missing) + "', but was not registered as it. Add .As<" + CSharpName(missing) +
                            ">() to its registration.";
                 }
 
@@ -129,6 +129,22 @@ namespace OpenUGD
             }
 
             return builder.Append('>').ToString();
+        }
+
+        /// How C# source names <paramref name="type"/> where its namespace is imported: <c>IRepo&lt;Item&gt;</c>,
+        /// never the metadata name <c>IRepo`1</c>, so a suggested <c>.As&lt;...&gt;()</c> can be pasted as is.
+        internal static string CSharpName(Type type)
+        {
+            if (!type.IsGenericType) return type.Name;
+
+            var name = type.Name;
+            var tick = name.IndexOf('`');
+            if (tick >= 0) name = name.Substring(0, tick);
+
+            var arguments = type.GetGenericArguments();
+            var names = new string[arguments.Length];
+            for (var i = 0; i < arguments.Length; i++) names[i] = CSharpName(arguments[i]);
+            return name + "<" + string.Join(", ", names) + ">";
         }
 
         internal static string Signature(System.Reflection.ParameterInfo[] parameters)

@@ -228,7 +228,8 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   `Context`, which every context supplies itself and nobody registers, and a missing `object` with
   ".As<Object>()" on whatever happened to be registered first. `Context` and `Lifetime` are no longer
   proposed for `.As<>` — the message says to take them directly instead — and `object` gets no `.As<>`
-  suggestion at all.
+  suggestion at all. A generic contract is written the way C# writes it, `.As<IStore<Item>>()`, not by its
+  metadata name ``.As<IStore`1>()``.
 - **Looking up a type the container has already read takes no lock** (audit CX-29). Every
   `Instantiate`, `Inject` and build took one global lock to reach the per-type metadata cache, and held it
   while reading a new type by reflection — which runs code of the type's own, such as an attribute
