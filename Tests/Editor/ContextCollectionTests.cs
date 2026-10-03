@@ -102,6 +102,41 @@ namespace OpenUGD.Tests
         }
 
         [Test]
+        public void AnElementWhoseFactoryResolvesItsOwnListIsACycle()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<FpsPanel>(c => {
+                c.Resolve<IReadOnlyList<IPanel>>();
+                return new FpsPanel();
+            }).AsElementOf<IPanel>();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("circular dependency", error.Message,
+                "A factory hides the edge from validation; construction still catches it.");
+            StringAssert.Contains("the factory registered for '" + typeof(FpsPanel).FullName + "' resolves",
+                error.Message);
+            CollectionAssert.AreEqual(new[] { typeof(FpsPanel), typeof(IReadOnlyList<IPanel>), typeof(FpsPanel) },
+                error.Path);
+        }
+
+        [Test]
+        public void WhateverHoldsTheListThroughAMemberBootsAfterEveryElement()
+        {
+            var log = new Log();
+            var builder = NewBuilder();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<BootingHolder>(); // registered first: only the member edge orders it last
+            builder.Services.Add<BootingPanel>().AsElementOf<IPanel>();
+            builder.Services.Add<OtherBootingPanel>().AsElementOf<IPanel>();
+
+            Build(builder);
+
+            AssertRanBefore(log, "panel", "holder");
+            AssertRanBefore(log, "other", "holder");
+        }
+
+        [Test]
         public void AParentsListDoesNotCountAsAvailableInAChild()
         {
             var parentBuilder = NewBuilder("parent");
@@ -194,6 +229,12 @@ namespace OpenUGD.Tests
         public sealed class BootingMenu : Booting
         {
             public BootingMenu(Log log, IReadOnlyList<IPanel> panels) : base(log, "menu") { }
+        }
+
+        public sealed class BootingHolder : Booting
+        {
+            [Inject] public IReadOnlyList<IPanel> Panels;
+            public BootingHolder(Log log) : base(log, "holder") { }
         }
 
         public sealed class BootingPanel : Booting, IPanel
