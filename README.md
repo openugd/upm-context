@@ -143,8 +143,9 @@ that phase — objects handed to `AddInstance` included. Services of the same de
 time, **in registration order**.
 
 Services that hold each other through `[Inject]` members cannot each boot after the other. Such a cycle
-shares one rank, after everything its members depend on outside it, so within the cycle registration
-order decides: register first the one that should boot first.
+shares one rank, after everything its members depend on outside it (a constructor dependency inside the
+cycle still boots first), so within the cycle registration order decides under the default mode:
+register first the one that should boot first.
 
 `builder.Initializers.Mode = StartupMode.Parallel` boots the services of one rank concurrently instead.
 On Unity's main thread that interleaves them rather than using other threads, so it only saves time when
