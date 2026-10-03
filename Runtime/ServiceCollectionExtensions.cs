@@ -83,7 +83,7 @@ namespace OpenUGD
         /// still rank this one correctly for the boot phases. The cost is that a factory's dependencies are
         /// invisible until it runs, so a dependency cycle through one cannot be caught by the pre-build
         /// check; it surfaces during construction, as a <see cref="ContextException"/> whose
-        /// <see cref="ContextException.Path"/> names the loop.
+        /// <see cref="ContextException.Path"/> names the loop and whose message names the factory.
         /// </para>
         /// <para>
         /// The factory must return a non-<c>null</c> instance assignable to <typeparamref name="TImpl"/>;
@@ -104,9 +104,10 @@ namespace OpenUGD
         /// <param name="services">The collection to register in.</param>
         /// <param name="factory">
         /// Builds the instance, once, during the build. Receives the context under construction. If it
-        /// throws, the exception propagates out of the build unwrapped — unlike a constructor's, which the
-        /// container catches to say which service it belonged to — and everything constructed so far is
-        /// disposed.
+        /// throws, the build fails with a <see cref="ContextException"/> that names this registration's site
+        /// and the chain of services being constructed, with what it threw as the
+        /// <see cref="Exception.InnerException"/> — as for a constructor that throws — and everything
+        /// constructed so far is disposed.
         /// </param>
         /// <param name="file">[compiler-supplied] The call site's file, for diagnostics. Do not pass
         /// it.</param>

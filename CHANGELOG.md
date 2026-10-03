@@ -63,7 +63,8 @@ Read this section if you are migrating from `ContextStartup` / `Service` / `Inje
 - **The whole graph is validated before anything is constructed**, and every problem is reported at
   once rather than one per run.
 - **Cycles are detected**, statically for constructor graphs and at construction time for cycles that
-  pass through a registration factory, and reported with the real path. Previously a cycle was an
+  pass through a registration factory or a constructor that resolves from its `Context`, and reported
+  with the real path. Previously a cycle was an
   uncatchable `StackOverflowException`, which under IL2CPP is a hard crash with no managed stack.
 - **A failed build is atomic.** Everything already constructed is disposed in reverse order and no
   `Context` escapes. There was previously no teardown or rollback of any kind.
@@ -169,6 +170,24 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   linked to the parent's lifetime, and ends — before the parent's services are disposed — with whichever
   of the two ends first. `BuildAsync` rechecks: a parent disposed after `CreateBuilder` cancels the build
   before anything is constructed, and one disposed during the boot cancels it like any end of the scope.
+
+- **A registration factory that throws is reported like a constructor that throws** (audit CX-8). What a
+  factory threw used to leave the build unwrapped, with no registration site and nothing to say which
+  service it was building. It is now a `ContextException` naming the registration, its file and line,
+  and the original's type and message, with the original as its `InnerException`.
+- **A failure during construction carries the chain that led to it** (audit CX-14). A constructor or a
+  factory that throws, and a factory that returns `null` or the wrong type, now report the services being
+  constructed at that moment (`while constructing A -> B -> C`), and `ContextException.Path` holds the
+  same chain. A failure that passes through a factory or a constructor on its way out is reported once,
+  for the service that failed, not wrapped again at each level. A factory that catches such a failure and
+  carries on no longer corrupts the build's bookkeeping, which used to crash it with an
+  `ArgumentOutOfRangeException` or report a cycle that was not there.
+- **A cycle found during construction names what hid it** (audit CX-14). Its message always blamed a
+  registration factory, and a cycle through a constructor that resolved from its `Context` was not
+  reported as a cycle at all: it arrived wrapped as "the constructor threw", with an empty `Path`. It is
+  now reported as a cycle with its path, and the message names each link the validation could not see —
+  a factory that resolves a service, or a constructor that resolves one from its `Context` — with its
+  registration site.
 
 ### Known limitations
 

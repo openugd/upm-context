@@ -146,15 +146,16 @@ namespace OpenUGD
         /// </exception>
         /// <exception cref="ContextException">
         /// The graph did not validate; a registration factory returned <c>null</c> or an instance of the
-        /// wrong type; or a constructor or a boot step threw, and those last two carry the original as their
-        /// <see cref="Exception.InnerException" />. A boot step that throws an
+        /// wrong type; or a constructor, a registration factory or a boot step threw, and those carry the
+        /// original as their <see cref="Exception.InnerException" />. A failure while constructing names
+        /// the registration site and the chain of services being constructed, which is also its
+        /// <see cref="ContextException.Path" />; a boot step's names the step and where it was registered.
+        /// A boot step that throws an
         /// <see cref="OperationCanceledException" /> while the build is not cancelled has failed, and is
         /// reported here too. When several steps of one rank fail together under
         /// <see cref="StartupMode.Parallel" />, a single <see cref="ContextException" /> names every one of
         /// them, and its <see cref="Exception.InnerException" /> is an <see cref="AggregateException" />
-        /// holding each step's own <see cref="ContextException" />, in boot order. An exception thrown by a
-        /// registration factory itself is not wrapped: it propagates as it was thrown, after the same
-        /// teardown.
+        /// holding each step's own <see cref="ContextException" />, in boot order.
         /// </exception>
         /// <exception cref="OperationCanceledException">
         /// <paramref name="cancellationToken" /> was cancelled; the lifetime the builder was created on ended,

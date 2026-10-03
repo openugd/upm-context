@@ -22,8 +22,9 @@ namespace OpenUGD
     /// inner exception is the original failure.
     /// </para>
     /// <para>
-    /// <b><see cref="Path"/> is filled in only for a circular dependency</b>, and is empty — never
-    /// <c>null</c> — for every other failure.
+    /// <b><see cref="Path"/> is the dependency chain a failure happened on</b>: the loop of a circular
+    /// dependency, or the chain of services being constructed when a constructor or a registration factory
+    /// failed. It is empty — never <c>null</c> — for every other failure.
     /// </para>
     /// </remarks>
     public sealed class ContextException : Exception
@@ -48,16 +49,15 @@ namespace OpenUGD
         /// registration site or boot phase where there is one.
         /// </param>
         /// <param name="innerException">
-        /// The original exception — what a constructor or a boot step threw.
-        /// The container never swallows it; this is where it stays. A registration factory is the one
-        /// thing not wrapped this way: what it throws leaves the build exactly as it was thrown.
+        /// The original exception — what a constructor, a registration factory or a boot step threw.
+        /// The container never swallows it; this is where it stays.
         /// </param>
         public ContextException(string message, Exception innerException) : base(message, innerException) =>
             Path = NoPath;
 
         /// <summary>
-        /// Creates a failure that carries the dependency chain it happened on — in practice, a circular
-        /// dependency.
+        /// Creates a failure that carries the dependency chain it happened on — a circular dependency, or
+        /// the services being constructed when construction failed.
         /// </summary>
         /// <param name="message">The diagnostic. It already renders the chain; <paramref name="path"/> is
         /// the machine-readable copy.</param>
@@ -78,14 +78,24 @@ namespace OpenUGD
 
         /// <summary>
         /// The dependency chain that failed, or an empty list — never <c>null</c>, so it can be iterated
-        /// without a guard. Non-empty only for a circular dependency.
+        /// without a guard. Non-empty for a circular dependency and for a failure during construction.
         /// </summary>
         /// <remarks>
         /// <para>
         /// For a cycle it lists the types around the loop in dependency order, with the type that closes the
         /// loop repeated at the end: <c>A, B, A</c> for two services that need each other, and <c>T, T</c>
-        /// for a service that needs itself. Each entry is the type its registration named, so a contract
-        /// added with <c>As</c> never appears — though the interface a factory was registered under does.
+        /// for a service that needs itself.
+        /// </para>
+        /// <para>
+        /// For a constructor or a registration factory that threw, or a factory that returned <c>null</c> or
+        /// the wrong type, it lists the services that were being constructed at that moment, from the one the
+        /// build was constructing down to the one that failed, which is last: <c>A, B, C</c> when
+        /// constructing <c>A</c> needed <c>B</c>, which needed <c>C</c>, which threw. It is just <c>C</c>
+        /// when nothing was waiting for <c>C</c>.
+        /// </para>
+        /// <para>
+        /// Each entry is the type its registration named, so a contract added with <c>As</c> never appears —
+        /// though the interface a factory was registered under does.
         /// </para>
         /// <para>
         /// The same chain is already rendered into <see cref="Exception.Message"/>. This exists so a test or

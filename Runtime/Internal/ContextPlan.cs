@@ -53,6 +53,10 @@ namespace OpenUGD
         private List<int> _stack;
         private int _current = -1;
 
+        // Build-time only: the last construction failure this plan raised, so that code it travels through
+        // on its way out - a factory, a constructor that resolved from its Context - can pass it on as is.
+        private Exception _failure;
+
         // Build-time only: who holds each object. One object can fill several slots - a forwarding factory
         // Add<I>(c => c.Resolve<X>()), one object handed to AddInstance twice, a factory returning an
         // AddInstance object, a child re-registering what its parent holds - so ownership is decided per
@@ -121,7 +125,7 @@ namespace OpenUGD
             if (slot >= Steps.Length) return null;
 
             var step = Steps[slot];
-            if (_state[slot] == 1) throw FactoryCycle(slot);
+            if (_state[slot] == 1) throw Raise(Cycle(slot));
 
             _state[slot] = 1;
             _stack.Add(slot);
@@ -129,44 +133,23 @@ namespace OpenUGD
             _current = slot;
 
             object instance;
-            if (step.Factory != null)
+            try
             {
-                instance = step.Factory(context);
-                if (instance == null)
-                {
-                    throw new ContextException(
-                        "The factory registered for '" + Diagnostics.Display(step.Implementation) +
-                        "' returned null." + Diagnostics.Where(step.Site));
-                }
-
-                if (!step.Implementation.IsInstanceOfType(instance))
-                {
-                    throw new ContextException(
-                        "The factory registered for '" + Diagnostics.Display(step.Implementation) +
-                        "' returned a '" + Diagnostics.Display(instance.GetType()) +
-                        "', which is not assignable to it." + Diagnostics.Where(step.Site));
-                }
+                instance = step.Factory != null ? Produce(context, step) : Construct(context, step);
             }
-            else
+            catch (Exception)
             {
-                var slots = step.ArgumentSlots;
-                var arguments = slots.Length == 0 ? null : new object[slots.Length];
-                for (var i = 0; i < slots.Length; i++) arguments[i] = Acquire(context, slots[i]);
-
-                try
-                {
-                    instance = step.Constructor.Invoke(arguments);
-                }
-                catch (TargetInvocationException exception)
-                {
-                    throw new ContextException(
-                        "The constructor of '" + Diagnostics.Display(step.Implementation) + "' threw." +
-                        Diagnostics.Where(step.Site), exception.InnerException ?? exception);
-                }
+                // Undo this attempt's mark: a factory may catch the failure and carry on, and a later attempt
+                // at this service must then be tried again, not reported as a cycle.
+                _state[slot] = 0;
+                throw;
+            }
+            finally
+            {
+                _current = previous;
+                _stack.RemoveAt(_stack.Count - 1);
             }
 
-            _current = previous;
-            _stack.RemoveAt(_stack.Count - 1);
             _state[slot] = 2;
             Instances[slot] = instance;
 
@@ -175,6 +158,81 @@ namespace OpenUGD
             Claim(context, slot, instance, step.Factory == null);
 
             return instance;
+        }
+
+        private object Produce(Context context, Step step)
+        {
+            object instance;
+            try
+            {
+                instance = step.Factory(context);
+            }
+            catch (Exception exception) when (!ReferenceEquals(exception, _failure))
+            {
+                // A failure this plan already reported - a service the factory resolved could not be built -
+                // passes through untouched: it names the innermost registration and the whole chain.
+                throw Raise(Failure("The factory registered for '" + Diagnostics.Display(step.Implementation) +
+                                    "' threw " + Diagnostics.Describe(exception), step, exception));
+            }
+
+            if (instance == null)
+            {
+                throw Raise(Failure("The factory registered for '" + Diagnostics.Display(step.Implementation) +
+                                    "' returned null.", step, null));
+            }
+
+            if (!step.Implementation.IsInstanceOfType(instance))
+            {
+                throw Raise(Failure("The factory registered for '" + Diagnostics.Display(step.Implementation) +
+                                    "' returned a '" + Diagnostics.Display(instance.GetType()) +
+                                    "', which is not assignable to it.", step, null));
+            }
+
+            return instance;
+        }
+
+        private object Construct(Context context, Step step)
+        {
+            var slots = step.ArgumentSlots;
+            var arguments = slots.Length == 0 ? null : new object[slots.Length];
+            for (var i = 0; i < slots.Length; i++) arguments[i] = Acquire(context, slots[i]);
+
+            try
+            {
+                return step.Constructor.Invoke(arguments);
+            }
+            catch (TargetInvocationException exception)
+            {
+                var original = exception.InnerException ?? exception;
+
+                // A constructor body that resolved from the Context it was given, and hit a failure this plan
+                // already reported, gets it back as itself rather than buried one level down.
+                if (ReferenceEquals(original, _failure)) ExceptionDispatchInfo.Capture(original).Throw();
+
+                throw Raise(Failure("The constructor of '" + Diagnostics.Display(step.Implementation) + "' threw " +
+                                    Diagnostics.Describe(original), step, original));
+            }
+        }
+
+        /// A failure while constructing <paramref name="step"/>, which is on top of the stack: where it was
+        /// registered, and the chain of services being constructed that led to it.
+        private ContextException Failure(string problem, Step step, Exception inner)
+        {
+            var chain = new List<Type>(_stack.Count);
+            for (var i = 0; i < _stack.Count; i++) chain.Add(Steps[_stack[i]].Implementation);
+
+            var message = problem + Diagnostics.Where(step.Site);
+            if (chain.Count > 1) message += "\n      while constructing " + Diagnostics.Path(chain);
+
+            return new ContextException(message, chain, inner);
+        }
+
+        /// Remembers the failure on its way out, so a factory or a constructor it travels through does not
+        /// wrap it a second time.
+        private ContextException Raise(ContextException failure)
+        {
+            _failure = failure;
+            return failure;
         }
 
         /// Records who holds <paramref name="instance"/>, now in <paramref name="slot"/>, and makes this
@@ -672,22 +730,51 @@ namespace OpenUGD
             return result;
         }
 
-        private ContextException FactoryCycle(int slot)
+        /// A cycle only construction could reveal. Every edge the validation could see is a constructor
+        /// parameter, so at least one link was code resolving from the Context while it ran: a registration
+        /// factory, or a constructor body that resolved from the Context it took. The message names those
+        /// links, since they are what hid the cycle.
+        private ContextException Cycle(int slot)
         {
             var path = new List<Type>();
+            var hidden = new List<string>();
             var start = _stack.IndexOf(slot);
-            for (var i = start; i < _stack.Count; i++) path.Add(Steps[_stack[i]].Implementation);
+            for (var i = start; i < _stack.Count; i++)
+            {
+                var from = _stack[i];
+                var to = i + 1 < _stack.Count ? _stack[i + 1] : slot;
+                path.Add(Steps[from].Implementation);
+
+                var step = Steps[from];
+                var target = "'" + Diagnostics.Display(Steps[to].Implementation) + "'";
+                if (step.Factory != null)
+                {
+                    hidden.Add("the factory registered for '" + Diagnostics.Display(step.Implementation) +
+                               "' resolves " + target + At(step.Site));
+                }
+                else if (Array.IndexOf(step.ArgumentSlots, to) < 0)
+                {
+                    hidden.Add("the constructor of '" + Diagnostics.Display(step.Implementation) +
+                               "' resolves " + target + " from the Context while it runs" + At(step.Site));
+                }
+            }
+
             path.Add(Steps[slot].Implementation);
 
+            var message = "A circular dependency was detected for the service of type '" +
+                          Diagnostics.Display(Steps[slot].Implementation) + "': " + Diagnostics.Path(path) + ".";
+            if (hidden.Count > 0)
+            {
+                message += "\n      It could not be caught before construction started, because code that runs " +
+                           "during construction makes part of it: " + string.Join("; ", hidden.ToArray()) + ".";
+            }
+
             return new ContextException(
-                "A circular dependency was detected for the service of type '" +
-                Diagnostics.Display(Steps[slot].Implementation) + "': " + Diagnostics.Path(path) +
-                ".\n      At least one step of this cycle goes through a registration factory, whose " +
-                "dependencies are opaque until it runs, so it could not be caught before construction " +
-                "started. Break it by taking one of these dependencies as an [Inject] member instead - " +
-                "member injection happens after every service exists, so it is allowed to be cyclic.",
-                path);
+                message + "\n      Break it by taking one of these dependencies as an [Inject] member instead - " +
+                "member injection happens after every service exists, so it is allowed to be cyclic.", path);
         }
+
+        private static string At(string site) => site == null ? string.Empty : " (registered at " + site + ")";
     }
 
     /// Equality by reference, whatever the type says: two registrations hold "the same object" only if they

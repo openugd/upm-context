@@ -128,6 +128,11 @@ namespace OpenUGD
 
         internal static string Where(string site) => site == null ? string.Empty : "\n      registered at " + site;
 
+        /// What an exception from user code was, on one line of a container message: its type and message.
+        /// The exception itself stays the InnerException.
+        internal static string Describe(Exception exception) =>
+            exception.GetType().Name + ": " + exception.Message;
+
         /// Appended to "has no public instance constructor": in a player build that is as likely to mean the
         /// linker removed the constructor as that the type never had one, and the two need different fixes.
         internal static string StrippingHint(int constructorsFound) =>
