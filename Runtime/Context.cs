@@ -282,7 +282,8 @@ namespace OpenUGD
         /// A non-optional <c>[Inject]</c> member has no registered contract — the message names the member
         /// and, where it can find one, suggests a contract to use instead — or the type's metadata for
         /// injection is invalid: a <c>readonly</c> or <c>const</c> field, an indexer, a property with no
-        /// setter, or <c>Optional</c> on a non-nullable value type.
+        /// setter, or <c>Optional</c> on a non-nullable value type — or an <c>[Inject]</c> property's setter
+        /// threw, which is then the <see cref="Exception.InnerException" />.
         /// </exception>
         public void Inject(object target)
         {
@@ -307,7 +308,7 @@ namespace OpenUGD
                     throw new ContextException(Diagnostics.UnableToResolveMember(member, type, null, Contracts));
                 }
 
-                member.SetValue(target, value);
+                member.SetValue(target, value, null);
             }
         }
 

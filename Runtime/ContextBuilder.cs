@@ -153,8 +153,8 @@ namespace OpenUGD
         /// </exception>
         /// <exception cref="ContextException">
         /// The graph did not validate; a registration factory returned <c>null</c> or an instance of the
-        /// wrong type; or a constructor, a registration factory or a boot step threw, and those carry the
-        /// original as their <see cref="Exception.InnerException" />. A failure while constructing names
+        /// wrong type; or a constructor, a registration factory, an <c>[Inject]</c> property setter or a boot
+        /// step threw, and those carry the original as their <see cref="Exception.InnerException" />. A failure while constructing names
         /// the registration site and the chain of services being constructed, which is also its
         /// <see cref="ContextException.Path" />; a boot step's names the step and where it was registered.
         /// A boot step that throws an

@@ -325,7 +325,7 @@ namespace OpenUGD
                             Diagnostics.UnableToResolveMember(member, type, Steps[i].Site, context.Contracts));
                     }
 
-                    member.SetValue(instance, value);
+                    member.SetValue(instance, value, Steps[i].Site);
 
                     // A member is a boot dependency too: the holder should not boot before what it holds.
                     // Only objects of this context count - an inherited one booted with its own context.

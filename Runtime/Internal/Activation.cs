@@ -29,10 +29,28 @@ namespace OpenUGD
             Optional = optional;
         }
 
-        internal void SetValue(object target, object value)
+        /// Assigns the member, reporting a property setter that throws the way a throwing constructor is
+        /// reported: which member of which type, where it was registered, and the original as the inner
+        /// exception.
+        internal void SetValue(object target, object value, string site)
         {
-            if (_field != null) _field.SetValue(target, value);
-            else _property.SetValue(target, value, null);
+            if (_field != null)
+            {
+                _field.SetValue(target, value);
+                return;
+            }
+
+            try
+            {
+                _property.SetValue(target, value, null);
+            }
+            catch (TargetInvocationException exception)
+            {
+                var original = exception.InnerException ?? exception;
+                throw new ContextException(
+                    "The setter of the [Inject] property '" + Diagnostics.Display(DeclaringType) + "." + Name +
+                    "' threw " + Diagnostics.Describe(original) + Diagnostics.Where(site), original);
+            }
         }
     }
 

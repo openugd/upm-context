@@ -156,6 +156,25 @@ namespace OpenUGD.Tests
                 new[] { typeof(ResolvesInBody), typeof(NeedsResolver), typeof(ResolvesInBody) }, error.Path);
         }
 
+        [Test]
+        public void AnInjectSetterThatThrowsIsReportedWithItsMemberAndSite()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<IGauge>(c => new Gauge(null));
+            builder.Services.Add<RefusesGauge>(); var line = Line();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("The setter of the [Inject] property '" + Name(typeof(RefusesGauge)) +
+                                  ".Gauge' threw InvalidOperationException: no thanks", error.Message);
+            StringAssert.Contains("registered at " + ThisFile() + ":" + line, error.Message);
+            Assert.IsInstanceOf<InvalidOperationException>(error.InnerException);
+
+            var context = Build(NewBuilder("inject"));
+            var injected = Assert.Throws<ContextException>(() => context.Inject(new NeedsGaugeMember()));
+            StringAssert.Contains(Name(typeof(IGauge)), injected.Message, "Context.Inject still reports a missing one.");
+        }
+
         // ===== boot =====
 
         [Test]
@@ -356,6 +375,20 @@ namespace OpenUGD.Tests
         public sealed class Gauge : IGauge
         {
             public Gauge(Bottom bottom) { }
+        }
+
+        public sealed class RefusesGauge
+        {
+            [Inject]
+            public IGauge Gauge
+            {
+                set => throw new InvalidOperationException("no thanks");
+            }
+        }
+
+        public sealed class NeedsGaugeMember
+        {
+            [Inject] public IGauge Gauge;
         }
 
         public sealed class NeedsGauge

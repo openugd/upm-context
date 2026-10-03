@@ -196,6 +196,10 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   a factory that resolves a service, or a constructor that resolves one from its `Context` — with its
   registration site.
 
+- **An `[Inject]` property setter that throws is reported like a constructor that throws** (audit
+  CX-14). It escaped the build, and `Context.Inject`, as a bare `TargetInvocationException`. It is now a
+  `ContextException` naming the member and, during the build, the registration's site, with the setter's
+  exception as its `InnerException`.
 - **A boot step that fails is named with the file and line it was registered at** (audit CX-14). The
   message named the step and the phase only. A service's step now carries the site of the registration
   that owns the service, and a step added to `InitializerCollection` the site of its `Add` call, which
