@@ -353,7 +353,10 @@ namespace OpenUGD
         /// interface requires, rather than throwing the way <c>Resolve&lt;T&gt;</c> would.
         /// </summary>
         /// <param name="serviceType">The contract to look up.</param>
-        /// <returns>The singleton, or <c>null</c> if nothing is registered for it.</returns>
+        /// <returns>The singleton, or <c>null</c> if nothing is registered for it — never for an
+        /// <c>IReadOnlyList&lt;T&gt;</c> of a reference type, which is this context's collection of
+        /// <see cref="Registration.AsElementOf" /> contributions, empty when there are none (see
+        /// <see cref="TryResolve" />).</returns>
         /// <exception cref="ArgumentNullException"><paramref name="serviceType" /> is <c>null</c>; the
         /// null-means-absent rule does not extend to the argument.</exception>
         /// <exception cref="ObjectDisposedException">
@@ -372,7 +375,9 @@ namespace OpenUGD
         /// what it inherited. Read while building a child, to tell an ancestor's objects from the child's.
         internal object[] Table => _instances;
 
-        internal bool CanResolve(Type contract) => _map.ContainsKey(contract);
+        /// Whether a child can inherit <paramref name="contract"/> from here: never a collection, which is local
+        /// to the context its contributions were registered in.
+        internal bool CanResolve(Type contract) => _map.ContainsKey(contract) && !_collections.Contains(contract);
 
         internal bool IsCollection(Type contract) => _collections.Contains(contract);
 

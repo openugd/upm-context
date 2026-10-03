@@ -97,7 +97,9 @@ namespace OpenUGD
         /// </para>
         /// <para>
         /// Each entry is the type its registration named, so a contract added with <c>As</c> never appears —
-        /// though the interface a factory was registered under does.
+        /// though the interface a factory was registered under does. A collection of
+        /// <see cref="Registration.AsElementOf" /> contributions being built appears as its
+        /// <c>IReadOnlyList&lt;T&gt;</c>.
         /// </para>
         /// <para>
         /// The same chain is already rendered into <see cref="Exception.Message"/>. This exists so a test or

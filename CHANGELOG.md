@@ -41,12 +41,13 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
   the parent's. A parent-registered singleton is always built and cached in the parent, even when first
   requested through a child.
 - `ContextException` carrying the dependency `Path`.
-- `Registration.AsElementOf<T>()`, for several modules contributing to one thing (decision 2d). The
-  contributions resolve only as `IReadOnlyList<T>`, in registration order; `T` itself stays unregistered.
-  The list is local to its context, empty when nothing contributes, and built once after every element,
-  so whatever takes it is constructed and boots after all of them; an element that takes its own list is
-  reported as a cycle. An `IReadOnlyList<T>` of a reference type that is not registered as an ordinary
-  contract therefore always resolves, so a constructor taking one is always satisfiable.
+- `Registration.AsElementOf(Type)` and its generic form `AsElementOf<T>()`, for several modules
+  contributing to one thing (decision 2d). The contributions resolve only as `IReadOnlyList<T>`, in
+  registration order; `T` itself stays unregistered. The list is local to its context, empty when nothing
+  contributes, and built once after every element, so whatever takes it is constructed and boots after all
+  of them; an element that takes its own list is reported as a cycle. An `IReadOnlyList<T>` of a
+  reference type that is not registered as an ordinary contract therefore always resolves, so a
+  constructor taking one is always satisfiable.
 - Support for IL2CPP managed code stripping with no `link.xml`. `[Inject]` derives from a linker
   `Preserve` attribute, so every `[Inject]` member survives with the attribute the container reads. The
   entry points that hand a user type to the activator (`Add<T>()`, `TryAdd`, `Registration.Add<T>()`,

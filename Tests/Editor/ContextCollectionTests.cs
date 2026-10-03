@@ -102,6 +102,20 @@ namespace OpenUGD.Tests
         }
 
         [Test]
+        public void AParentsListDoesNotCountAsAvailableInAChild()
+        {
+            var parentBuilder = NewBuilder("parent");
+            parentBuilder.Services.Add<FpsPanel>().AsElementOf<IPanel>();
+            var parent = Build(parentBuilder);
+
+            var child = Context.CreateBuilder(parent: parent);
+
+            Assert.IsFalse(child.Services.Contains(typeof(IReadOnlyList<IPanel>)),
+                "The parent's list is local to the parent, so TryAdd in the child must not count on it.");
+            Assert.IsTrue(child.Services.Contains(typeof(FpsPanel)), "An ordinary registration is still inherited.");
+        }
+
+        [Test]
         public void AContributionTheElementTypeDoesNotFitIsAValidationError()
         {
             var builder = NewBuilder();
