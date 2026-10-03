@@ -270,6 +270,19 @@ namespace OpenUGD.Tests
         }
 
         [Test]
+        public void InstantiateReportsAThrowingConstructorAsTheBuildDoes()
+        {
+            var context = Build(NewBuilder());
+
+            var error = Assert.Throws<ContextException>(() => context.Instantiate<Bottom>());
+
+            StringAssert.StartsWith(
+                "The constructor of '" + Name(typeof(Bottom)) + "' threw InvalidOperationException: bottom failed",
+                error.Message, "What was thrown is on the first line, as in a build failure.");
+            Assert.IsInstanceOf<InvalidOperationException>(error.InnerException);
+        }
+
+        [Test]
         public void InstantiateRejectsTwoEquallyWideConstructorsItCouldSatisfyAsTheBuildDoes()
         {
             var builder = NewBuilder();

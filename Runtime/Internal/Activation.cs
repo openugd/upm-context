@@ -383,9 +383,11 @@ namespace OpenUGD
             }
             catch (TargetInvocationException exception)
             {
+                // The build's wording: what was thrown, on the first line, and the original as the inner one.
+                var original = exception.InnerException ?? exception;
                 throw new ContextException(
-                    "The constructor of '" + Diagnostics.Display(type) + "' threw.",
-                    exception.InnerException ?? exception);
+                    "The constructor of '" + Diagnostics.Display(type) + "' threw " + Diagnostics.Describe(original),
+                    original);
             }
         }
 
