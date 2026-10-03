@@ -177,7 +177,6 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   linked to the parent's lifetime, and ends — before the parent's services are disposed — with whichever
   of the two ends first. `BuildAsync` rechecks: a parent disposed after `CreateBuilder` cancels the build
   before anything is constructed, and one disposed during the boot cancels it like any end of the scope.
-
 - **A registration factory that throws is reported like a constructor that throws** (audit CX-8). What a
   factory threw used to leave the build unwrapped, with no registration site and nothing to say which
   service it was building. It is now a `ContextException` naming the registration, its file and line,
@@ -195,7 +194,6 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   now reported as a cycle with its path, and the message names each link the validation could not see —
   a factory that resolves a service, or a constructor that resolves one from its `Context` — with its
   registration site.
-
 - **An `[Inject]` property setter that throws is reported like a constructor that throws** (audit
   CX-14). It escaped the build, and `Context.Inject`, as a bare `TargetInvocationException`. It is now a
   `ContextException` naming the member and, during the build, the registration's site, with the setter's
@@ -206,19 +204,16 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   records it the way `ServiceCollection.Add` does (two compiler-supplied parameters after `name`). Each
   step listed in a `StartupMode.Parallel` rank failure carries its site too, and the step's exception
   type and message are on the first line.
-
 - **`Instantiate` reports a missing dependency the way the build does** (audit CX-14). It said only
   "Unable to resolve service for type 'X' (constructor parameter 'x')". It now uses the build's wording,
   names the type it was activating and the parameter, and adds the build's suggestion: a registered type
   that implements the contract but was not registered as it, or the nearest registered name.
-
 - **`Instantiate` chooses a constructor by the build's rule** (audit CX-23). The build rejects two
   equally wide public constructors that can both be satisfied as ambiguous; `Instantiate` silently took
   whichever reflection happened to list first. It now throws the same ambiguity error, naming both
   signatures. Constructors are also sorted stably, widest first with ties in the order reflection lists
   them, so which one is tried and named first no longer varies between runs (`Array.Sort` is unstable and
   did reorder them on .NET's runtime once a type had more than 16 constructors).
-
 - **A `MonoBehaviour`, `ScriptableObject` or other `UnityEngine.Object` is never constructed by
   reflection** (audit CX-27). `Add<T>()` and `Instantiate<T>()` called its constructor, which in Unity
   only logs a warning and yields an object with no native counterpart. Both now refuse such a type —
@@ -226,20 +221,17 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   do instead: register the object Unity made with `AddInstance`, or a factory that creates it the Unity
   way; for `Instantiate`, create it and pass it to `Context.Inject`. (The other half of CX-27, engine
   objects' properties leaking into configuration, left with the configuration system.)
-
 - **A suggestion never asks for an `.As<>` that cannot be added** (audit CX-28). A missing
   `ILifetimeProvider` or `IServiceProvider` was answered with "add .As<…>() to its registration" for
   `Context`, which every context supplies itself and nobody registers, and a missing `object` with
   ".As<Object>()" on whatever happened to be registered first. `Context` and `Lifetime` are no longer
   proposed for `.As<>` — the message says to take them directly instead — and `object` gets no `.As<>`
   suggestion at all.
-
 - **Looking up a type the container has already read takes no lock** (audit CX-29). Every
   `Instantiate`, `Inject` and build took one global lock to reach the per-type metadata cache, and held it
   while reading a new type by reflection — which runs code of the type's own, such as an attribute
   constructor — so one slow read stalled every other thread's lookup. Hits are now lock-free, and a type
   is read outside any lock.
-
 - **Nothing encourages blocking on `BuildAsync` any more, and `Build` replaces it** (audit CX-20).
   The docs said a graph without asynchronous steps "completes synchronously" and the README and tests
   read the result with `GetAwaiter().GetResult()`, which deadlocks under a single-threaded
@@ -249,7 +241,6 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   waiting; the build is then abandoned as if the context had been disposed from inside it — cancelled at
   once, torn down once the steps in flight finish. A cancelled build now also starts no further step of
   the current rank, not just no further rank.
-
 - **The README shows output the package really produces** (audit CX-15, CX-33). Its "When it goes
   wrong" example was a message the code could not produce — a different layout, and a "Did you mean"
   suggestion the name-distance threshold never makes for those names. It now shows a message captured by
@@ -257,7 +248,6 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   claims are gone: `ContextException` is not "the one exception the container throws", the core types do
   not "carry at most three methods", and this section no longer carries a release date for a version
   that has not been released.
-
 - **The README says to end a root context with the play session** (audit CX-21). Its quick start
   rooted the context in `Lifetime.Eternal`, which is static: with domain reload disabled, the context and
   every singleton in it survived play-mode exit into the next session. A new "Play mode and domain reload"
