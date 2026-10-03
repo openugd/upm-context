@@ -197,8 +197,8 @@ namespace OpenUGD
         /// call site.
         /// </para>
         /// <para>
-        /// <b>Cost.</b> Reflection, on every call. The per-type metadata is cached and the cache is locked,
-        /// so this is safe to call concurrently, but it is not the thing to do in a hot loop.
+        /// <b>Cost.</b> Reflection, on every call. The per-type metadata is cached, and reading a cached type
+        /// takes no lock, so this is safe to call concurrently, but it is not the thing to do in a hot loop.
         /// </para>
         /// <para>
         /// <b>Managed code stripping.</b> <paramref name="type"/> is annotated for Unity's linker, so

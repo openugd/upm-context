@@ -223,6 +223,12 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   proposed for `.As<>` — the message says to take them directly instead — and `object` gets no `.As<>`
   suggestion at all.
 
+- **Looking up a type the container has already read takes no lock** (audit CX-29). Every
+  `Instantiate`, `Inject` and build took one global lock to reach the per-type metadata cache, and held it
+  while reading a new type by reflection — which runs code of the type's own, such as an attribute
+  constructor — so one slow read stalled every other thread's lookup. Hits are now lock-free, and a type
+  is read outside any lock.
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was

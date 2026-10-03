@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -123,6 +125,34 @@ namespace OpenUGD.Tests
             {
                 SynchronizationContext.SetSynchronizationContext(previous);
             }
+        }
+
+        private static ModuleBuilder _module;
+        private static int _emitted;
+
+        /// Makes a public class with a public parameterless constructor at run time: for a type no earlier
+        /// run has seen (and cached), or one named like a type this assembly cannot declare. With
+        /// <paramref name="fieldAttribute"/>, it also gets a public object field carrying that attribute.
+        /// A <paramref name="name"/> of <c>null</c> gets a fresh one.
+        protected static Type Emit(string name = null, Type parent = null, ConstructorInfo fieldAttribute = null)
+        {
+            if (_module == null)
+            {
+                var assembly = AssemblyBuilder.DefineDynamicAssembly(
+                    new AssemblyName("OpenUGD.Tests.Emitted"), AssemblyBuilderAccess.Run);
+                _module = assembly.DefineDynamicModule("OpenUGD.Tests.Emitted");
+            }
+
+            var type = _module.DefineType(name ?? "OpenUGD.Tests.Emitted" + Interlocked.Increment(ref _emitted),
+                TypeAttributes.Public | TypeAttributes.Class, parent);
+            type.DefineDefaultConstructor(MethodAttributes.Public);
+            if (fieldAttribute != null)
+            {
+                type.DefineField("Member", typeof(object), FieldAttributes.Public)
+                    .SetCustomAttribute(new CustomAttributeBuilder(fieldAttribute, new object[0]));
+            }
+
+            return type.CreateTypeInfo().AsType();
         }
 
         protected static void AssertRanBefore(Log log, string earlier, string later)

@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using NUnit.Framework;
 
@@ -344,24 +343,8 @@ namespace OpenUGD.Tests
         {
             private static Type _behaviour;
 
-            internal static Type Behaviour => _behaviour ?? (_behaviour = Emit());
-
-            private static Type Emit()
-            {
-                var assembly = AssemblyBuilder.DefineDynamicAssembly(
-                    new AssemblyName("OpenUGD.Tests.FakeEngine"), AssemblyBuilderAccess.Run);
-                var module = assembly.DefineDynamicModule("OpenUGD.Tests.FakeEngine");
-
-                Type parent = null;
-                foreach (var name in new[] { "UnityEngine.Object", "UnityEngine.Component", "Game.FakeBehaviour" })
-                {
-                    var type = module.DefineType(name, TypeAttributes.Public | TypeAttributes.Class, parent);
-                    type.DefineDefaultConstructor(MethodAttributes.Public);
-                    parent = type.CreateTypeInfo().AsType();
-                }
-
-                return parent;
-            }
+            internal static Type Behaviour => _behaviour ?? (_behaviour =
+                Emit("Game.FakeBehaviour", Emit("UnityEngine.Component", Emit("UnityEngine.Object"))));
         }
 
         public sealed class RealBehaviour : UnityEngine.MonoBehaviour { }

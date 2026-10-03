@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -37,8 +38,9 @@ namespace OpenUGD
 
     internal static class Activation
     {
-        private static readonly object Gate = new object();
-        private static readonly Dictionary<Type, TypeMetadata> Cache = new Dictionary<Type, TypeMetadata>();
+        private static readonly ConcurrentDictionary<Type, TypeMetadata> Cache =
+            new ConcurrentDictionary<Type, TypeMetadata>();
+        private static readonly Func<Type, TypeMetadata> ReadMetadata = Read;
         private static readonly object[] NoArguments = new object[0];
         private static readonly Member[] NoMembers = new Member[0];
 
@@ -53,17 +55,14 @@ namespace OpenUGD
             internal string MemberError;
         }
 
+        /// A hit takes no lock. A miss reads the type outside any lock - reflection is slow and may run code
+        /// of the type's own, such as an attribute's constructor - so it never holds up a lookup of another
+        /// type; two threads missing the same type at once may both read it, and both get the one that was
+        /// stored first. The metadata never changes once read.
         internal static TypeMetadata GetMetadata(Type type)
         {
-            lock (Gate)
-            {
-                TypeMetadata metadata;
-                if (Cache.TryGetValue(type, out metadata)) return metadata;
-
-                metadata = Read(type);
-                Cache[type] = metadata;
-                return metadata;
-            }
+            TypeMetadata metadata;
+            return Cache.TryGetValue(type, out metadata) ? metadata : Cache.GetOrAdd(type, ReadMetadata);
         }
 
         internal static Member[] GetInjectMembers(Type type, out string error)
