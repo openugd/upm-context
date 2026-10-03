@@ -31,5 +31,27 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/openugd/upm-context.git"
-  }
+  },
+  "samples": [
+    {
+      "displayName": "Basic Boot",
+      "description": "A composition root from start to end: registrations, a ScriptableObject settings asset handed over with AddInstance, services booted in the Awake and Initialize phases, BuildAsync awaited from a MonoBehaviour entry point, and a scope that ends in OnDestroy so nothing survives play mode. Includes EditMode tests.",
+      "path": "Samples~/BasicBoot"
+    },
+    {
+      "displayName": "Child Scopes",
+      "description": "A root context for the game, a child context per level and per window: children see and shadow their parent's services, dispose only their own, and end with their parent even on a scope of their own. Plain C# with a runner component; includes EditMode tests.",
+      "path": "Samples~/ChildScopes"
+    },
+    {
+      "displayName": "Collections",
+      "description": "Several modules contributing to one IReadOnlyList<T> with AsElementOf: a tick loop, a debug menu and development-only cheats, in registration order, empty rather than missing, and local to their context. Plain C# with a runner component; includes EditMode tests.",
+      "path": "Samples~/Collections"
+    },
+    {
+      "displayName": "MonoBehaviour Injection",
+      "description": "Context.Inject on scene components: a scene context that builds in Awake and injects every component of its scene, a required [Inject] member and an [Inject(Optional = true)] one, and injection of objects spawned later. Includes EditMode tests.",
+      "path": "Samples~/MonoBehaviourInjection"
+    }
+  ]
 }

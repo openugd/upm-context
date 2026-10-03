@@ -1,0 +1,17 @@
+{
+    "name": "com.openugd.context.samples.monobehaviourinjection",
+    "rootNamespace": "OpenUGD.Samples.MonoBehaviourInjection",
+    "references": [
+        "com.openugd.context",
+        "com.openugd.lifetime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

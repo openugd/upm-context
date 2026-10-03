@@ -1,0 +1,26 @@
+{
+    "name": "com.openugd.context.samples.collections.tests",
+    "rootNamespace": "OpenUGD.Samples.Collections.Tests",
+    "references": [
+        "com.openugd.context.samples.collections",
+        "com.openugd.context",
+        "com.openugd.lifetime",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

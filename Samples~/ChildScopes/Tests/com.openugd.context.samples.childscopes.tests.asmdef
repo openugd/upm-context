@@ -1,0 +1,26 @@
+{
+    "name": "com.openugd.context.samples.childscopes.tests",
+    "rootNamespace": "OpenUGD.Samples.ChildScopes.Tests",
+    "references": [
+        "com.openugd.context.samples.childscopes",
+        "com.openugd.context",
+        "com.openugd.lifetime",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
