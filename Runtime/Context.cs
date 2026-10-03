@@ -101,7 +101,9 @@ namespace OpenUGD
         /// does dispose the context — or, if it is still being built, cancels the build and disposes what it
         /// constructed once the boot steps in flight have finished. Defaults to
         /// <paramref name="parent" />'s lifetime, or to <see cref="OpenUGD.Lifetime.Eternal" /> when there
-        /// is no parent either — which is a process-long scope, so pass one for anything shorter.
+        /// is no parent either — which is a process-long scope, so pass one for anything shorter. In Unity
+        /// with domain reload disabled, a process-long scope also outlives play mode, so a root context
+        /// belongs on a lifetime that ends with the play session (the README explains).
         /// </param>
         /// <param name="parent">
         /// The context to inherit registrations from, or <c>null</c> for a root. A child resolves whatever

@@ -62,7 +62,7 @@ public sealed class Profile : IAwakeService
 ```
 
 ```csharp
-var scope   = Lifetime.Eternal.DefineNested("app");
+var scope   = Lifetime.Eternal.DefineNested("app");   // in Unity, see "Play mode and domain reload"
 var builder = Context.CreateBuilder(scope);
 
 builder.Services
@@ -133,6 +133,44 @@ services after they are gone.
 
 For a one-off object that is *not* registered and *not* owned by the container, use
 `context.Instantiate<T>()` — constructor-injected, and yours to dispose.
+
+## Play mode and domain reload
+
+A context lives until the lifetime it was created on ends, and `Lifetime.Eternal` never ends. It is a
+static field, so when *Enter Play Mode Options* skip the domain reload, everything nested in it — a root
+context and every singleton in it — survives play-mode exit: still alive, still subscribed, still holding
+its resources in the next play session. A root context must therefore end with the play session.
+
+`com.openugd.corelib` provides the lifetime for that: `PlaySession.Lifetime` (namespace `OpenUGD.Core`)
+ends when the application quits or play mode is exited, and starts afresh with the next session;
+`ContextBehaviour` already roots its contexts in it. This package has no engine reference, so it cannot
+do that by itself. Without corelib, end the root yourself:
+
+```csharp
+using System.Threading.Tasks;
+using OpenUGD;
+using UnityEngine;
+
+public static class GameRoot
+{
+    public static Task<Context> BuildAsync()
+    {
+        // Application.quitting is raised on player quit and, in the editor, on play-mode exit.
+        var session = Lifetime.Eternal.DefineNested("play session");
+        void End()
+        {
+            Application.quitting -= End;   // static events survive a skipped domain reload too
+            session.Terminate();
+        }
+
+        Application.quitting += End;
+
+        var builder = Context.CreateBuilder(session);
+        // builder.Services.Add<...>();
+        return builder.BuildAsync();
+    }
+}
+```
 
 ## Boot order
 

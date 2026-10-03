@@ -248,6 +248,12 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   not "carry at most three methods", and this section no longer carries a release date for a version
   that has not been released.
 
+- **The README says to end a root context with the play session** (audit CX-21). Its quick start
+  rooted the context in `Lifetime.Eternal`, which is static: with domain reload disabled, the context and
+  every singleton in it survived play-mode exit into the next session. A new "Play mode and domain reload"
+  section explains this, points to `PlaySession.Lifetime` in `com.openugd.corelib`, and shows how to end a
+  root context on `Application.quitting` without corelib.
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was
