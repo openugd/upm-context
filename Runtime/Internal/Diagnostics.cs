@@ -40,14 +40,24 @@ namespace OpenUGD
             var name = missing.Name;
             Type sameName = null;
             Type nearest = null;
+            Type automatic = null;
             var nearestDistance = int.MaxValue;
 
             foreach (var candidate in candidates)
             {
                 if (candidate == missing) continue;
 
-                if (missing.IsAssignableFrom(candidate))
+                // Everything is an object, so "registered as object" is never the fix.
+                if (missing != typeof(object) && missing.IsAssignableFrom(candidate))
                 {
+                    // Context and Lifetime are supplied by the context itself: there is no registration to
+                    // add a contract to, so .As<> would be advice nobody can follow.
+                    if (candidate == typeof(Context) || candidate == typeof(Lifetime))
+                    {
+                        if (automatic == null) automatic = candidate;
+                        continue;
+                    }
+
                     return "'" + Display(candidate) + "' is registered and does implement '" +
                            Display(missing) + "', but was not registered as it. Add .As<" + name +
                            ">() to its registration.";
@@ -64,6 +74,13 @@ namespace OpenUGD
 
                 nearestDistance = distance;
                 nearest = candidate;
+            }
+
+            if (automatic != null)
+            {
+                return "'" + Display(automatic) + "' implements '" + Display(missing) + "', and every context " +
+                       "supplies one, but it cannot be registered as anything else. Take '" + Display(automatic) +
+                       "' itself instead.";
             }
 
             if (sameName != null)

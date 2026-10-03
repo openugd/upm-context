@@ -204,6 +204,34 @@ namespace OpenUGD.Tests
                                   ThisFile() + ":" + second, error.Message);
         }
 
+        // ===== suggestions =====
+
+        [Test]
+        public void ASuggestionNeverAsksToAddAsToAContractTheContextSuppliesItself()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<NeedsLifetimeProvider>();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.DoesNotContain(".As<ILifetimeProvider>()", error.Message,
+                "Context is supplied automatically; there is no registration to add .As<> to.");
+            StringAssert.Contains("Take '" + Name(typeof(Context)) + "' itself instead", error.Message);
+        }
+
+        [Test]
+        public void ASuggestionNeverAsksToRegisterSomethingAsObject()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<Dial>();
+            builder.Services.Add<NeedsObject>();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("Unable to resolve service for type 'System.Object'", error.Message);
+            StringAssert.DoesNotContain(".As<Object>()", error.Message);
+        }
+
         // ===== Instantiate =====
 
         [Test]
@@ -404,6 +432,16 @@ namespace OpenUGD.Tests
         {
             public EitherWay(IGauge gauge) { }
             public EitherWay(IDial dial) { }
+        }
+
+        public sealed class NeedsLifetimeProvider
+        {
+            public NeedsLifetimeProvider(ILifetimeProvider provider) { }
+        }
+
+        public sealed class NeedsObject
+        {
+            public NeedsObject(object anything) { }
         }
 
         public sealed class Box<T> { }

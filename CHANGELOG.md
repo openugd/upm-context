@@ -216,6 +216,13 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   way; for `Instantiate`, create it and pass it to `Context.Inject`. (The other half of CX-27, engine
   objects' properties leaking into configuration, left with the configuration system.)
 
+- **A suggestion never asks for an `.As<>` that cannot be added** (audit CX-28). A missing
+  `ILifetimeProvider` or `IServiceProvider` was answered with "add .As<…>() to its registration" for
+  `Context`, which every context supplies itself and nobody registers, and a missing `object` with
+  ".As<Object>()" on whatever happened to be registered first. `Context` and `Lifetime` are no longer
+  proposed for `.As<>` — the message says to take them directly instead — and `object` gets no `.As<>`
+  suggestion at all.
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was
