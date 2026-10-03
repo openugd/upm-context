@@ -146,7 +146,10 @@ namespace OpenUGD
         /// wrong type; or a constructor or a boot step threw, and those last two carry the original as their
         /// <see cref="Exception.InnerException" />. A boot step that throws an
         /// <see cref="OperationCanceledException" /> while the build is not cancelled has failed, and is
-        /// reported here too. An exception thrown by a registration factory itself is
+        /// reported here too. When several steps of one rank fail together under
+        /// <see cref="StartupMode.Parallel" />, a single <see cref="ContextException" /> names every one of
+        /// them, and its <see cref="Exception.InnerException" /> is an <see cref="AggregateException" />
+        /// holding each step's own <see cref="ContextException" />, in boot order. An exception thrown by a registration factory itself is
         /// not wrapped: it propagates as it was thrown, after the same teardown.
         /// </exception>
         /// <exception cref="OperationCanceledException">

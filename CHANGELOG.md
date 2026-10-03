@@ -111,6 +111,12 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   reported as if the caller had cancelled the build, with no step named. Now only a cancellation while the
   build's own token is cancelled propagates unwrapped; any other is wrapped in a `ContextException` that
   names the step and the phase and keeps the original as its `InnerException`.
+- **Every boot step that fails in a `StartupMode.Parallel` rank is reported** (audit CX-11). The rank was
+  awaited with `Task.WhenAll`, whose `await` rethrows only the first failure, so the others were lost. One
+  failure is still its own `ContextException`; several arrive as one `ContextException` that names every
+  failed step with its exception's type and message, and whose `InnerException` is an
+  `AggregateException` of the per-step `ContextException`s in boot order. A failure now also wins over a
+  cancellation in the same rank instead of depending on which task came first.
 
 ### Known limitations
 

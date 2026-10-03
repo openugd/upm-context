@@ -62,7 +62,81 @@ namespace OpenUGD.Tests
             Assert.IsNotInstanceOf<ContextException>(error);
         }
 
+        // ===== several concurrent failures (CX-11) =====
+
+        [Test]
+        public void EveryFailingStepOfAParallelRankIsReported()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<FailsFirst>();
+            builder.Services.Add<FailsSecond>();
+            builder.Services.Add<Succeeds>();
+            builder.Initializers.Mode = StartupMode.Parallel;
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains(typeof(FailsFirst).Name + ".AwakeAsync", error.Message);
+            StringAssert.Contains(typeof(FailsSecond).Name + ".AwakeAsync", error.Message);
+            StringAssert.Contains("first failed", error.Message);
+            StringAssert.Contains("second failed", error.Message);
+
+            var all = error.InnerException as AggregateException;
+            Assert.IsNotNull(all, "Several failures arrive as an AggregateException under the ContextException.");
+            Assert.AreEqual(2, all.InnerExceptions.Count);
+
+            var first = all.InnerExceptions[0] as ContextException;
+            var second = all.InnerExceptions[1] as ContextException;
+            Assert.IsNotNull(first, "Each step keeps the ContextException that names it.");
+            Assert.IsNotNull(second);
+            StringAssert.Contains(typeof(FailsFirst).Name, first.Message, "Boot order: registration order.");
+            StringAssert.Contains(typeof(FailsSecond).Name, second.Message);
+            Assert.AreEqual("first failed", first.InnerException.Message);
+            Assert.AreEqual("second failed", second.InnerException.Message);
+            Assert.IsTrue(builder.Lifetime.IsTerminated);
+        }
+
+        [Test]
+        public void ASingleFailureInAParallelRankIsReportedAsItself()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<Succeeds>();
+            builder.Services.Add<FailsSecond>();
+            builder.Initializers.Mode = StartupMode.Parallel;
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains(typeof(FailsSecond).Name + ".AwakeAsync", error.Message);
+            Assert.IsInstanceOf<InvalidOperationException>(error.InnerException,
+                "One failure is not wrapped in an aggregate: its InnerException is the step's own exception.");
+        }
+
         // ===== fixtures =====
+
+        public sealed class FailsFirst : IAwakeService
+        {
+            public async Task AwakeAsync(CancellationToken cancellationToken)
+            {
+                await Task.Yield();
+                throw new InvalidOperationException("first failed");
+            }
+        }
+
+        public sealed class FailsSecond : IAwakeService
+        {
+            public async Task AwakeAsync(CancellationToken cancellationToken)
+            {
+                await Task.Yield();
+                throw new InvalidOperationException("second failed");
+            }
+        }
+
+        public sealed class Succeeds : IAwakeService
+        {
+            public async Task AwakeAsync(CancellationToken cancellationToken)
+            {
+                await Task.Yield();
+            }
+        }
 
         public sealed class GivesUp : IInitializeService
         {

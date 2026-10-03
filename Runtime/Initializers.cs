@@ -88,9 +88,10 @@ namespace OpenUGD
         /// <summary>
         /// Opt-in. Steps of one rank start together and the rank ends when the last of them finishes.
         /// Every task in a rank is awaited even after one has already faulted, so teardown never runs while
-        /// a boot step is still touching the objects it is about to dispose. On Unity's main thread this
-        /// interleaves steps rather than running them on other threads, so it saves time only when steps
-        /// await I/O, and it gives up the deterministic order.
+        /// a boot step is still touching the objects it is about to dispose, and every step that failed is
+        /// reported: one as its own <see cref="ContextException" />, several as one that names each of them.
+        /// On Unity's main thread this interleaves steps rather than running them on other threads, so it
+        /// saves time only when steps await I/O, and it gives up the deterministic order.
         /// </summary>
         Parallel = 1
     }

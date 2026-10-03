@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -254,12 +256,84 @@ namespace OpenUGD
                     for (var k = i; k < end; k++) tasks[k - i] = InvokeAsync(steps[k], phase, context, token);
 
                     // Waits for every task in the rank even when one has already failed, so teardown never
-                    // runs while a boot step is still touching the objects it is about to dispose.
-                    await Task.WhenAll(tasks);
+                    // runs while a boot step is still touching the objects it is about to dispose. Awaiting
+                    // WhenAll would rethrow only the first failure, so the rank is inspected as a whole.
+                    try
+                    {
+                        await Task.WhenAll(tasks);
+                    }
+                    catch (Exception)
+                    {
+                        ThrowRankFailure(steps, i, tasks, phase, token);
+                        throw;
+                    }
                 }
 
                 i = end;
             }
+        }
+
+        /// Reports every step of a concurrently run rank that failed: one failure as itself, several as one
+        /// ContextException naming each step. Failures win over cancellation, so a cancellation racing a
+        /// real error never hides it. Returns only if nothing in the rank failed or was cancelled.
+        private static void ThrowRankFailure(BootStep[] steps, int first, Task[] tasks, BootPhase phase,
+            CancellationToken token)
+        {
+            List<Exception> failures = null;
+            List<string> names = null;
+            var cancelled = false;
+
+            for (var t = 0; t < tasks.Length; t++)
+            {
+                var task = tasks[t];
+                if (task.IsCanceled)
+                {
+                    cancelled = true;
+                    continue;
+                }
+
+                if (!task.IsFaulted) continue;
+
+                // InvokeAsync faults only with the ContextException naming its step, and lets nothing but the
+                // build's own cancellation through - which an async method turns into a cancelled task.
+                foreach (var exception in task.Exception.InnerExceptions)
+                {
+                    if (exception is OperationCanceledException)
+                    {
+                        cancelled = true;
+                        continue;
+                    }
+
+                    (failures ?? (failures = new List<Exception>())).Add(exception);
+                    (names ?? (names = new List<string>())).Add(steps[first + t].Name);
+                }
+            }
+
+            if (failures == null)
+            {
+                if (!cancelled) return;
+
+                token.ThrowIfCancellationRequested();
+                throw new OperationCanceledException(token);
+            }
+
+            if (failures.Count == 1) ExceptionDispatchInfo.Capture(failures[0]).Throw();
+
+            var message = new StringBuilder();
+            message.Append(failures.Count).Append(" boot steps threw during the ").Append(phase)
+                .Append(" phase of Context.BuildAsync:");
+            for (var f = 0; f < failures.Count; f++)
+            {
+                var original = failures[f].InnerException ?? failures[f];
+                message.Append("\n      '").Append(names[f]).Append("': ")
+                    .Append(original.GetType().Name).Append(": ").Append(original.Message);
+            }
+
+            message.Append("\n      The Context was not built and everything constructed so far has been disposed. ")
+                .Append("The InnerException is an AggregateException holding one ContextException per step, ")
+                .Append("in boot order, each with that step's original exception as its InnerException.");
+
+            throw new ContextException(message.ToString(), new AggregateException(failures));
         }
 
         private static async Task InvokeAsync(BootStep step, BootPhase phase, Context context,
