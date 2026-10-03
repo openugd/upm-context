@@ -183,14 +183,17 @@ namespace OpenUGD
             List<BootStep> awake = null;
             List<BootStep> initialize = null;
 
-            // Explicit initializers first within their phase (rank -1): they are infrastructure the
-            // services of that phase may rely on, and they are not part of the dependency graph.
+            // Explicit initializers first within their phase: they are infrastructure the services of that
+            // phase may rely on, and they are not part of the dependency graph. Each gets a rank of its own,
+            // below every service's and increasing in Add order, so they run one at a time in the order they
+            // were added even under StartupMode.Parallel - a later step may rely on an earlier one, and
+            // nothing in a lambda says otherwise.
             var entries = initializers.Entries;
             for (var i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
                 Add(ref awake, ref initialize, entry.Phase,
-                    new BootStep { Rank = -1, Name = entry.Name, Run = entry.Step });
+                    new BootStep { Rank = i - entries.Count, Name = entry.Name, Run = entry.Step });
             }
 
             // Enrolment is by what the instance actually is, not by the registered type, so a factory

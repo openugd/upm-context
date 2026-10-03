@@ -110,6 +110,60 @@ namespace OpenUGD.Tests
                 "One failure is not wrapped in an aggregate: its InnerException is the step's own exception.");
         }
 
+        // ===== explicit steps (CX-10) =====
+
+        [Test]
+        public void ExplicitStepsRunOneAtATimeInAddOrderEvenUnderParallel()
+        {
+            var builder = NewBuilder();
+            var log = new Log();
+            builder.Initializers.Mode = StartupMode.Parallel;
+            builder.Initializers
+                .Add(BootPhase.Awake, async (c, ct) => {
+                    log.Add("first:enter");
+                    await Task.Delay(20, ct); // long enough that an overlapping step would start meanwhile
+                    log.Add("first:exit");
+                }, "first")
+                .Add(BootPhase.Awake, async (c, ct) => {
+                    log.Add("second:enter");
+                    await Task.Delay(20, ct);
+                    log.Add("second:exit");
+                }, "second")
+                .Add(BootPhase.Awake, (c, ct) => {
+                    log.Add("third");
+                    return Task.CompletedTask;
+                }, "third");
+
+            Build(builder);
+
+            CollectionAssert.AreEqual(
+                new[] { "first:enter", "first:exit", "second:enter", "second:exit", "third" }, log.Entries,
+                "A later explicit step may rely on an earlier one, so they never overlap.");
+        }
+
+        [Test]
+        public void ExplicitStepsStillRunAheadOfEveryServiceOfTheirPhase()
+        {
+            var builder = NewBuilder();
+            var log = new Log();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<LogsAwake>();
+            builder.Initializers.Mode = StartupMode.Parallel;
+            builder.Initializers
+                .Add(BootPhase.Awake, async (c, ct) => {
+                    await Task.Yield();
+                    log.Add("step:a");
+                }, "a")
+                .Add(BootPhase.Awake, (c, ct) => {
+                    log.Add("step:b");
+                    return Task.CompletedTask;
+                }, "b");
+
+            Build(builder);
+
+            CollectionAssert.AreEqual(new[] { "step:a", "step:b", "service" }, log.Entries);
+        }
+
         // ===== fixtures =====
 
         public sealed class FailsFirst : IAwakeService
@@ -135,6 +189,18 @@ namespace OpenUGD.Tests
             public async Task AwakeAsync(CancellationToken cancellationToken)
             {
                 await Task.Yield();
+            }
+        }
+
+        public sealed class LogsAwake : IAwakeService
+        {
+            private readonly Log _log;
+            public LogsAwake(Log log) { _log = log; }
+
+            public Task AwakeAsync(CancellationToken cancellationToken)
+            {
+                _log.Add("service");
+                return Task.CompletedTask;
             }
         }
 

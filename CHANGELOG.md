@@ -117,6 +117,10 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   failed step with its exception's type and message, and whose `InnerException` is an
   `AggregateException` of the per-step `ContextException`s in boot order. A failure now also wins over a
   cancellation in the same rank instead of depending on which task came first.
+- **Steps added to `InitializerCollection` run one at a time, in the order they were added, in both
+  startup modes** (audit CX-10). They all shared one rank, so under `StartupMode.Parallel` they ran
+  concurrently although a later step may well rely on an earlier one and nothing in a lambda says so.
+  Each now has a rank of its own, still ahead of every service of its phase.
 
 ### Known limitations
 

@@ -94,9 +94,9 @@ namespace OpenUGD
         /// is only for work that has no object of its own to hang on.
         /// </summary>
         /// <remarks>
-        /// Also carries <see cref="InitializerCollection.Mode" />, which decides whether the steps of a
-        /// dependency rank run concurrently or one at a time — for every step of the boot, not just the
-        /// ones added here.
+        /// Also carries <see cref="InitializerCollection.Mode" />, which decides whether the services of a
+        /// dependency rank boot concurrently or one at a time. The steps added here always run one at a
+        /// time, in the order they were added.
         /// </remarks>
         public InitializerCollection Initializers { get; }
 
