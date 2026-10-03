@@ -114,6 +114,13 @@ namespace OpenUGD
             return builder.Append('>').ToString();
         }
 
+        internal static string Signature(System.Reflection.ParameterInfo[] parameters)
+        {
+            var names = new string[parameters.Length];
+            for (var i = 0; i < parameters.Length; i++) names[i] = Display(parameters[i].ParameterType);
+            return string.Join(", ", names);
+        }
+
         internal static string Path(IReadOnlyList<Type> path)
         {
             var builder = new StringBuilder();

@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using NUnit.Framework;
 
@@ -220,6 +222,46 @@ namespace OpenUGD.Tests
                 "Instantiate gives the same suggestion the build would.");
         }
 
+        [Test]
+        public void InstantiateRejectsTwoEquallyWideConstructorsItCouldSatisfyAsTheBuildDoes()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<IGauge>(c => new Gauge(null));
+            builder.Services.Add<Dial>().As<IDial>();
+            var context = Build(builder);
+
+            var error = Assert.Throws<ContextException>(() => context.Instantiate<EitherWay>());
+
+            StringAssert.Contains("ambiguous", error.Message);
+            StringAssert.Contains("(" + Name(typeof(IGauge)) + ")", error.Message);
+            StringAssert.Contains("(" + Name(typeof(IDial)) + ")", error.Message);
+            StringAssert.Contains("[Inject]", error.Message);
+        }
+
+        [Test]
+        public void InstantiateStillTakesTheOnlyEquallyWideConstructorItCanSatisfy()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<Dial>().As<IDial>();
+            var context = Build(builder);
+
+            Assert.IsNotNull(context.Instantiate<EitherWay>());
+        }
+
+        [Test]
+        public void EquallyWideConstructorsKeepTheOrderReflectionListsThemIn()
+        {
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            var reflected = typeof(ManyConstructors).GetConstructors(all)
+                .Where(c => c.GetParameters().Length == 1).ToArray();
+
+            var sorted = Activation.GetMetadata(typeof(ManyConstructors)).Constructors;
+
+            CollectionAssert.AreEqual(reflected, sorted.Take(reflected.Length).ToArray(),
+                "Widest first, and ties in reflection order: an unstable sort shuffles them.");
+            Assert.AreEqual(0, sorted[sorted.Length - 1].GetParameters().Length);
+        }
+
         // ===== fixtures =====
 
         public interface IGauge { }
@@ -276,6 +318,43 @@ namespace OpenUGD.Tests
         {
             public System.Threading.Tasks.Task AwakeAsync(System.Threading.CancellationToken cancellationToken) =>
                 throw new InvalidOperationException("also failed");
+        }
+
+        public interface IDial { }
+
+        public sealed class Dial : IDial { }
+
+        public sealed class EitherWay
+        {
+            public EitherWay(IGauge gauge) { }
+            public EitherWay(IDial dial) { }
+        }
+
+        public sealed class Box<T> { }
+
+        public sealed class ManyConstructors
+        {
+            public ManyConstructors() { }
+            public ManyConstructors(Box<byte> value) { }
+            public ManyConstructors(Box<sbyte> value) { }
+            public ManyConstructors(Box<short> value) { }
+            public ManyConstructors(Box<ushort> value) { }
+            public ManyConstructors(Box<int> value) { }
+            public ManyConstructors(Box<uint> value) { }
+            public ManyConstructors(Box<long> value) { }
+            public ManyConstructors(Box<ulong> value) { }
+            public ManyConstructors(Box<float> value) { }
+            public ManyConstructors(Box<double> value) { }
+            public ManyConstructors(Box<decimal> value) { }
+            public ManyConstructors(Box<char> value) { }
+            public ManyConstructors(Box<bool> value) { }
+            public ManyConstructors(Box<string> value) { }
+            public ManyConstructors(Box<object> value) { }
+            public ManyConstructors(Box<DateTime> value) { }
+            public ManyConstructors(Box<TimeSpan> value) { }
+            public ManyConstructors(Box<Guid> value) { }
+            public ManyConstructors(Box<Version> value) { }
+            public ManyConstructors(Box<Uri> value) { }
         }
 
         public sealed class ResolvesInBody

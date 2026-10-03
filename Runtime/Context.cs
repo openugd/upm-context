@@ -190,10 +190,11 @@ namespace OpenUGD
         /// is a well-known way to leak. Register the lifetime yourself if you want the context to end it.
         /// </para>
         /// <para>
-        /// <b>How a constructor is chosen.</b> If exactly one constructor is marked <c>[Inject]</c> it is
-        /// used; otherwise every public constructor is tried widest-first and the first one that can be
-        /// fully satisfied wins. Unlike a registration, this choice is made now rather than validated at
-        /// build time, so a failure surfaces here, at the call site.
+        /// <b>How a constructor is chosen.</b> As for a registration: if exactly one constructor is marked
+        /// <c>[Inject]</c> it is used; otherwise the widest public constructor that can be fully satisfied,
+        /// and two equally wide ones that both can be are an error, not a choice. Unlike a registration,
+        /// this choice is made now rather than validated at build time, so a failure surfaces here, at the
+        /// call site.
         /// </para>
         /// <para>
         /// <b>Cost.</b> Reflection, on every call. The per-type metadata is cached and the cache is locked,
@@ -223,6 +224,7 @@ namespace OpenUGD
         /// </exception>
         /// <exception cref="ContextException">
         /// <paramref name="type" /> cannot be activated; it has more than one <c>[Inject]</c> constructor;
+        /// two equally wide public constructors can both be satisfied;
         /// no public constructor could be satisfied from <paramref name="args" /> and this context — the
         /// message names the parameter that could not be supplied, with the suggestion a build error would
         /// make (a registered type that implements its contract, or the nearest registered name); the

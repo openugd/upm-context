@@ -91,13 +91,30 @@ namespace OpenUGD
 
             var constructors = type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic |
                                                     BindingFlags.Instance);
-            Array.Sort(constructors, (a, b) => b.GetParameters().Length.CompareTo(a.GetParameters().Length));
+            var parameters = new ParameterInfo[constructors.Length][];
+            for (var i = 0; i < constructors.Length; i++) parameters[i] = constructors[i].GetParameters();
+
+            // Widest first, and stable: equally wide constructors keep the order reflection returned them in,
+            // so which of them is tried and named first never varies from one run to the next.
+            for (var i = 1; i < constructors.Length; i++)
+            {
+                var constructor = constructors[i];
+                var signature = parameters[i];
+                var j = i - 1;
+                for (; j >= 0 && parameters[j].Length < signature.Length; j--)
+                {
+                    constructors[j + 1] = constructors[j];
+                    parameters[j + 1] = parameters[j];
+                }
+
+                constructors[j + 1] = constructor;
+                parameters[j + 1] = signature;
+            }
 
             metadata.Constructors = constructors;
-            metadata.Parameters = new ParameterInfo[constructors.Length][];
+            metadata.Parameters = parameters;
             for (var i = 0; i < constructors.Length; i++)
             {
-                metadata.Parameters[i] = constructors[i].GetParameters();
                 if (constructors[i].IsPublic) metadata.PublicCount++;
 
                 var marker = GetInject(constructors[i], false);
@@ -276,19 +293,41 @@ namespace OpenUGD
                     Diagnostics.StrippingHint(metadata.Constructors.Length));
             }
 
+            // The build's rule: the widest satisfiable public constructor, and two equally wide ones that can
+            // both be satisfied are an error rather than a choice made by the order reflection lists them in.
+            var chosen = -1;
+            object[] chosenValues = null;
             string firstFailure = null;
             for (var i = 0; i < metadata.Constructors.Length; i++)
             {
                 if (!metadata.Constructors[i].IsPublic) continue;
+                if (chosen >= 0 && metadata.Parameters[i].Length != metadata.Parameters[chosen].Length) break;
                 if (used != null) Array.Clear(used, 0, used.Length);
 
                 object[] values;
                 string missing;
-                if (TryBind(context, type, metadata.Parameters[i], args, used, out values, out missing))
-                    return Invoke(type, metadata.Constructors[i], values);
+                if (!TryBind(context, type, metadata.Parameters[i], args, used, out values, out missing))
+                {
+                    if (firstFailure == null) firstFailure = missing;
+                    continue;
+                }
 
-                if (firstFailure == null) firstFailure = missing;
+                if (chosen < 0)
+                {
+                    chosen = i;
+                    chosenValues = values;
+                    continue;
+                }
+
+                throw new ContextException(
+                    "Cannot instantiate '" + Diagnostics.Display(type) + "': it has two public constructors of " +
+                    metadata.Parameters[i].Length + " parameters that can both be satisfied, so the choice is " +
+                    "ambiguous: (" + Diagnostics.Signature(metadata.Parameters[chosen]) + ") and (" +
+                    Diagnostics.Signature(metadata.Parameters[i]) + ")." +
+                    "\n      Mark the one you mean with [Inject], or construct it yourself.");
             }
+
+            if (chosen >= 0) return Invoke(type, metadata.Constructors[chosen], chosenValues);
 
             throw new ContextException(
                 "Cannot instantiate '" + Diagnostics.Display(type) +

@@ -201,6 +201,13 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   names the type it was activating and the parameter, and adds the build's suggestion: a registered type
   that implements the contract but was not registered as it, or the nearest registered name.
 
+- **`Instantiate` chooses a constructor by the build's rule** (audit CX-23). The build rejects two
+  equally wide public constructors that can both be satisfied as ambiguous; `Instantiate` silently took
+  whichever reflection happened to list first. It now throws the same ambiguity error, naming both
+  signatures. Constructors are also sorted stably, widest first with ties in the order reflection lists
+  them, so which one is tried and named first no longer varies between runs (`Array.Sort` is unstable and
+  did reorder them on .NET's runtime once a type had more than 16 constructors).
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was

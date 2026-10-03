@@ -118,9 +118,10 @@ namespace OpenUGD
         /// it owns. Register it on a lifetime yourself if it needs releasing.
         /// </para>
         /// <para>
-        /// The constructor is chosen per call: the one marked <see cref="InjectAttribute"/> if there is one,
-        /// otherwise public constructors widest-first, taking the first whose parameters can all be
-        /// supplied.
+        /// The constructor is chosen per call, by the build's rule: the one marked
+        /// <see cref="InjectAttribute"/> if there is one, otherwise the widest public constructor whose
+        /// parameters can all be supplied. Two equally wide constructors that both can be are an error, not
+        /// a choice.
         /// </para>
         /// </remarks>
         /// <typeparam name="T">The concrete type to construct. An interface, an abstract type, a value type
@@ -130,8 +131,9 @@ namespace OpenUGD
         /// <exception cref="ArgumentNullException"><paramref name="context"/> is <c>null</c>.</exception>
         /// <exception cref="ContextException">
         /// <typeparamref name="T"/> cannot be activated, or no constructor of it could be satisfied — the
-        /// message names the parameter that could not be supplied — or its constructor threw, in which case
-        /// the original exception is the <see cref="Exception.InnerException"/>.
+        /// message names the parameter that could not be supplied — or two equally wide constructors could
+        /// both be, or its constructor threw, in which case the original exception is the
+        /// <see cref="Exception.InnerException"/>.
         /// </exception>
         /// <exception cref="ObjectDisposedException">The context has been disposed.</exception>
         public static T Instantiate<[DynamicallyAccessedMembers(Trimming.Constructors)] T>(this Context context)
@@ -178,8 +180,9 @@ namespace OpenUGD
         /// <returns>The new instance.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="context"/> is <c>null</c>.</exception>
         /// <exception cref="ContextException">
-        /// <typeparamref name="T"/> cannot be activated, or no constructor could be satisfied from these
-        /// arguments and this context, or its constructor threw.
+        /// <typeparamref name="T"/> cannot be activated, no constructor could be satisfied from these
+        /// arguments and this context, two equally wide constructors both could be, or its constructor
+        /// threw.
         /// </exception>
         /// <exception cref="ObjectDisposedException">The context has been disposed.</exception>
         public static T Instantiate<[DynamicallyAccessedMembers(Trimming.Constructors)] T>(this Context context,

@@ -237,8 +237,8 @@ namespace OpenUGD
                         "'" + Diagnostics.Display(type) + "' has two public constructors of " +
                         metadata.Parameters[i].Length +
                         " parameters that can both be satisfied, so the choice is ambiguous: (" +
-                        Signature(metadata.Parameters[chosen]) + ") and (" +
-                        Signature(metadata.Parameters[i]) + ")." + Diagnostics.Where(entry.Site) +
+                        Diagnostics.Signature(metadata.Parameters[chosen]) + ") and (" +
+                        Diagnostics.Signature(metadata.Parameters[i]) + ")." + Diagnostics.Where(entry.Site) +
                         "\n      Mark the one you mean with [Inject], or register a factory.");
                     return;
                 }
@@ -290,17 +290,6 @@ namespace OpenUGD
                 }
 
                 return true;
-            }
-
-            private static string Signature(ParameterInfo[] parameters)
-            {
-                var names = new string[parameters.Length];
-                for (var i = 0; i < parameters.Length; i++)
-                {
-                    names[i] = Diagnostics.Display(parameters[i].ParameterType);
-                }
-
-                return string.Join(", ", names);
             }
 
             private IEnumerable<Type> Known()
