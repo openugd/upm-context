@@ -142,9 +142,11 @@ namespace OpenUGD
         /// </para>
         /// </remarks>
         /// <param name="cancellationToken">
-        /// Checked before each dependency rank of each phase and passed to every boot step, linked with a
-        /// token cancelled when the scope ends, so that ending the scope also aborts the build. Cancelling
-        /// tears down the same way a failure does.
+        /// Abandons the build: cancelling it cancels the token every boot step receives, the build stops
+        /// before the next dependency rank, and it tears down the same way a failure does. It is listened to
+        /// only while the build runs; cancelling it after <c>BuildAsync</c> has returned changes nothing.
+        /// The boot steps never see this token itself — they get one token that behaves the same whether or
+        /// not this one was passed (see <see cref="IAwakeService.AwakeAsync" />).
         /// </param>
         /// <returns>The built context, with every singleton constructed, injected and booted.</returns>
         /// <exception cref="InvalidOperationException">
@@ -158,8 +160,9 @@ namespace OpenUGD
         /// reported here too. When several steps of one rank fail together under
         /// <see cref="StartupMode.Parallel" />, a single <see cref="ContextException" /> names every one of
         /// them, and its <see cref="Exception.InnerException" /> is an <see cref="AggregateException" />
-        /// holding each step's own <see cref="ContextException" />, in boot order. An exception thrown by a registration factory itself is
-        /// not wrapped: it propagates as it was thrown, after the same teardown.
+        /// holding each step's own <see cref="ContextException" />, in boot order. An exception thrown by a
+        /// registration factory itself is not wrapped: it propagates as it was thrown, after the same
+        /// teardown.
         /// </exception>
         /// <exception cref="OperationCanceledException">
         /// <paramref name="cancellationToken" /> was cancelled, the lifetime the builder was created on
@@ -184,16 +187,15 @@ namespace OpenUGD
             Services.Seal();
             Initializers.Seal();
 
-            CancellationTokenSource linked = null;
+            // One token for the boot steps whether or not the caller passed one: cancelled when the build is
+            // abandoned and, once the context is live, when it ends - before anything is disposed. The
+            // caller's token is only ever a way to abandon the build, so it is wired in for the build alone.
             var token = _scope.BeginBuild();
-            if (cancellationToken.CanBeCanceled)
-            {
-                linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancellationToken);
-                token = linked.Token;
-            }
+            var registration = default(CancellationTokenRegistration);
 
             try
             {
+                if (cancellationToken.CanBeCanceled) registration = cancellationToken.Register(_scope.CancelBuild);
                 token.ThrowIfCancellationRequested();
 
                 var plan = PlanBuilder.Build(this);
@@ -230,7 +232,7 @@ namespace OpenUGD
             }
             finally
             {
-                if (linked != null) linked.Dispose();
+                registration.Dispose();
             }
         }
     }

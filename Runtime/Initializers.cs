@@ -114,11 +114,14 @@ namespace OpenUGD
         /// most once, because a <see cref="ContextBuilder" /> builds at most once.
         /// </summary>
         /// <param name="cancellationToken">
-        /// Cancelled when the context's <see cref="OpenUGD.Lifetime" /> terminates or when the token passed
-        /// to <see cref="ContextBuilder.BuildAsync" /> is cancelled. Observing it aborts the whole build,
-        /// so an implementation that ignores it delays the failure rather than avoiding it. Only this token
-        /// cancels the build: an <see cref="OperationCanceledException" /> from a token of the service's
-        /// own fails it, as any other exception does.
+        /// Cancelled when the build is abandoned — the token passed to <see cref="ContextBuilder.BuildAsync" />
+        /// is cancelled, or the context's scope ends while it is being built — and, once the context has
+        /// been built, when the context ends, before any of its services is disposed. It behaves the same
+        /// whether or not a token was passed to <see cref="ContextBuilder.BuildAsync" />, so work this step
+        /// leaves running may keep it as its stop signal. Observing it during the build aborts the whole
+        /// build, so an implementation that ignores it delays the failure rather than avoiding it. Only this
+        /// token cancels the build: an <see cref="OperationCanceledException" /> from a token of the
+        /// service's own fails it, as any other exception does.
         /// </param>
         /// <returns>
         /// A task that completes when this service is ready. <c>null</c> is accepted and treated as an
@@ -144,8 +147,8 @@ namespace OpenUGD
         /// phase and after every service of a lower dependency rank in this phase. Called at most once.
         /// </summary>
         /// <param name="cancellationToken">
-        /// Cancelled when the context's <see cref="OpenUGD.Lifetime" /> terminates or when the token passed
-        /// to <see cref="ContextBuilder.BuildAsync" /> is cancelled.
+        /// The same token <see cref="IAwakeService.AwakeAsync" /> receives: cancelled when the build is
+        /// abandoned and, once the context has been built, when it ends, before anything is disposed.
         /// </param>
         /// <returns>
         /// A task that completes when this service is ready; <c>null</c> counts as completed. Throwing, or
@@ -211,9 +214,9 @@ namespace OpenUGD
         /// <param name="phase">Which of the two stages of the boot the step belongs to.</param>
         /// <param name="step">
         /// The work to do. It is handed the context being built — fully constructed and resolvable, but not
-        /// yet returned to the caller — and a token cancelled when the context's
-        /// <see cref="OpenUGD.Lifetime" /> terminates or the token given to
-        /// <see cref="ContextBuilder.BuildAsync" /> is cancelled. It may return <c>null</c> in place of an
+        /// yet returned to the caller — and the token every boot step receives (see
+        /// <see cref="IAwakeService.AwakeAsync" />): cancelled when the build is abandoned and, once the
+        /// context has been built, when it ends. It may return <c>null</c> in place of an
         /// already-completed task. Throwing fails the build, which disposes everything constructed so far
         /// and lets no <see cref="Context" /> escape.
         /// </param>

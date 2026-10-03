@@ -70,6 +70,22 @@ namespace OpenUGD
             return boot.Token;
         }
 
+        /// The caller's token was cancelled: abandon the build, if one is running. After the build this does
+        /// nothing - the caller's token is a way to abandon a build, not to end a live context.
+        internal void CancelBuild()
+        {
+            CancellationTokenSource boot;
+            lock (_gate)
+            {
+                if (_phase != Building) return;
+
+                _cancelled = true;
+                boot = _boot;
+            }
+
+            boot.Cancel();
+        }
+
         /// The last thing a build that got through every step does: the context goes live - unless its scope
         /// ended in the meantime, in which case this throws and the build fails like any cancelled one.
         internal void CompleteBuild(CancellationToken token)

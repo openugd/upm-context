@@ -149,6 +149,14 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   only cancels the build's token, and the build ends the scope once it has unwound. Before and after the
   build an end is immediate, as before, and teardown keeps its reverse construction order with the
   services' own lifetime actions interleaved.
+- **The token handed to boot steps behaves the same whether or not a token was passed to `BuildAsync`**
+  (audit CX-13). Without one, steps got a token derived from the context's lifetime, which stayed live
+  for the context's whole life and was cancelled when it ended — after its services had been disposed;
+  with one, they got a linked token whose source was disposed when the build returned, so it was never
+  cancelled at all afterwards. Now every step gets the same token, cancelled when the build is abandoned
+  (the caller's token is cancelled, or the scope ends during the build) and, once the context is live,
+  when the context ends, before anything is disposed — so work a step leaves running can stop on it. The
+  caller's token is listened to only while the build runs.
 
 ### Known limitations
 

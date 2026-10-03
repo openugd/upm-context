@@ -113,7 +113,81 @@ namespace OpenUGD.Tests
                 log.Entries, "Teardown stays in reverse order of construction, actions and disposals interleaved.");
         }
 
+        // ===== the boot token (CX-13) =====
+
+        [Test]
+        public void TheBootTokenIsCancelledFirstWhenTheContextEndsWhetherOrNotTheCallerPassedOne(
+            [Values(false, true)] bool callerToken, [Values(false, true)] bool endedByOuterLifetime)
+        {
+            var definition = NewDefinition("outer");
+            var builder = Context.CreateBuilder(definition.Lifetime);
+            var log = new Log();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<LogsDispose>();
+            builder.Services.Add<KeepsItsToken>();
+            var caller = new CancellationTokenSource();
+            var context = Build(builder, callerToken ? caller.Token : default(CancellationToken));
+
+            var token = context.Resolve<KeepsItsToken>().Token;
+            Assert.IsFalse(token.IsCancellationRequested, "A live context's boot token is not cancelled.");
+            token.Register(() => log.Add("cancelled"));
+
+            if (endedByOuterLifetime) definition.Terminate();
+            else context.Dispose();
+
+            CollectionAssert.AreEqual(new[] { "cancelled", "disposed" }, log.Entries,
+                "Work a boot step left running hears of the end before anything it uses is disposed.");
+        }
+
+        [Test]
+        public void CancellingTheCallersTokenAfterTheBuildCancelsNothing()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<KeepsItsToken>();
+            var caller = new CancellationTokenSource();
+            var context = Build(builder, caller.Token);
+            var token = context.Resolve<KeepsItsToken>().Token;
+
+            caller.Cancel();
+
+            Assert.IsFalse(token.IsCancellationRequested,
+                "The caller's token abandons a build; it does not reach into a live context.");
+            Assert.IsFalse(context.Lifetime.IsTerminated);
+        }
+
+        [Test]
+        public void TheCallersTokenStillAbandonsTheBuild()
+        {
+            var builder = NewBuilder();
+            var log = new Log();
+            builder.Services.AddInstance(log);
+            builder.Services.Add<LogsDispose>();
+            var caller = new CancellationTokenSource();
+            CancellationToken seen = default(CancellationToken);
+            builder.Initializers.Add(BootPhase.Awake, async (c, ct) => {
+                seen = ct;
+                caller.Cancel();
+                await Task.Delay(5000, ct);
+            }, "cancels-the-caller");
+
+            FailToBuild<OperationCanceledException>(builder, caller.Token);
+
+            Assert.IsTrue(seen.IsCancellationRequested);
+            CollectionAssert.AreEqual(new[] { "disposed" }, log.Entries);
+        }
+
         // ===== fixtures =====
+
+        public sealed class KeepsItsToken : IAwakeService
+        {
+            public CancellationToken Token;
+
+            public Task AwakeAsync(CancellationToken cancellationToken)
+            {
+                Token = cancellationToken;
+                return Task.CompletedTask;
+            }
+        }
 
         public sealed class LogsDispose : IDisposable
         {

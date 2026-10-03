@@ -62,7 +62,8 @@ namespace OpenUGD.Tests
         protected ContextBuilder NewBuilder(string name = "root") =>
             Context.CreateBuilder(lifetime: NewDefinition(name).Lifetime);
 
-        protected Context Build(ContextBuilder builder, CancellationToken cancellationToken = default(CancellationToken))
+        protected Context Build(ContextBuilder builder,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             var context = RunSync(builder.BuildAsync(cancellationToken));
             Assert.IsNotNull(context, "BuildAsync must never hand back a null Context.");
