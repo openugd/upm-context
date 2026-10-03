@@ -122,8 +122,7 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   awaited with `Task.WhenAll`, whose `await` rethrows only the first failure, so the others were lost. One
   failure is still its own `ContextException`; several arrive as one `ContextException` that names every
   failed step with its exception's type and message, and whose `InnerException` is an
-  `AggregateException` of the per-step `ContextException`s in boot order. A failure now also wins over a
-  cancellation in the same rank instead of depending on which task came first.
+  `AggregateException` of the per-step `ContextException`s in boot order.
 - **Steps added to `InitializerCollection` run one at a time, in the order they were added, in both
   startup modes** (audit CX-10). They all shared one rank, so under `StartupMode.Parallel` they ran
   concurrently although a later step may well rely on an earlier one and nothing in a lambda says so.
@@ -165,7 +164,7 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   when the context ends, before anything is disposed — so work a step leaves running can stop on it. The
   caller's token is listened to only while the build runs.
 - **A child given a lifetime of its own still ends with its parent** (audit CX-3). The child's scope was
-  nested in `lifetime ?? parent.Lifetime`, so a child built on any lifetime other than the parent's
+  nested in `lifetime ?? parent.Lifetime`, so a child built on a lifetime not nested in the parent's
   outlived a disposed parent and went on handing out its disposed services. A child's scope is now also
   linked to the parent's lifetime, and ends — before the parent's services are disposed — with whichever
   of the two ends first. `BuildAsync` rechecks: a parent disposed after `CreateBuilder` cancels the build
