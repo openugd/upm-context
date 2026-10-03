@@ -18,7 +18,8 @@ namespace OpenUGD
 
     /// <summary>
     /// The built container: a fixed set of singletons, resolvable by contract, that die together when its
-    /// <see cref="Lifetime" /> terminates. Obtained only from <see cref="ContextBuilder.BuildAsync" />.
+    /// <see cref="Lifetime" /> terminates. Obtained only by building one, with
+    /// <see cref="ContextBuilder.BuildAsync" /> or <see cref="ContextBuilder.Build" />.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -86,7 +87,8 @@ namespace OpenUGD
 
         /// <summary>
         /// Starts describing a context. This is the entry point to the whole package: there is no public
-        /// constructor, and <see cref="ContextBuilder.BuildAsync" /> is the only way a
+        /// constructor, and building — <see cref="ContextBuilder.BuildAsync" />, or
+        /// <see cref="ContextBuilder.Build" /> for a boot that completes synchronously — is the only way a
         /// <see cref="Context" /> comes into existence.
         /// </summary>
         /// <remarks>

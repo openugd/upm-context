@@ -121,8 +121,9 @@ namespace OpenUGD
         /// constructor, a factory returning the wrong type, a boot step, a cancellation — the context's
         /// <see cref="Lifetime" /> is terminated, which disposes exactly what had been constructed, in
         /// reverse construction order, and the original exception is rethrown. No half-built
-        /// <see cref="Context" /> is ever returned, and none is reachable from anywhere else, because this
-        /// is the only place one is handed out. The teardown runs only after every boot step in flight has
+        /// <see cref="Context" /> is ever returned; one that a factory, a constructor or a boot step kept
+        /// hold of during the build is disposed with it, so it throws <see cref="ObjectDisposedException" />
+        /// rather than hand out torn-down services. The teardown runs only after every boot step in flight has
         /// finished — a concurrent rank is awaited whole — so it never disposes what a step is still using.
         /// </para>
         /// <para>
