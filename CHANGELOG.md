@@ -101,6 +101,17 @@ these changes.
   `BuildAsync` puts second in its `AggregateException`. Migration: catch the exception your service
   throws (or `Exception`) rather than only `AggregateException`.
 
+### Fixed
+
+Defects in unreleased snapshots of this package, found by the 2026-09 audit and fixed before release.
+
+- **A boot step's own cancellation is a failure of that step, not a cancellation of the build** (audit
+  CX-12). Every `OperationCanceledException` a step threw used to propagate unwrapped, so a timeout inside
+  `AwakeAsync` — a `TaskCanceledException` from an HTTP call, a `Task.Delay` on a token of its own — was
+  reported as if the caller had cancelled the build, with no step named. Now only a cancellation while the
+  build's own token is cancelled propagates unwrapped; any other is wrapped in a `ContextException` that
+  names the step and the phase and keeps the original as its `InnerException`.
+
 ### Known limitations
 
 - Activation uses reflection. A Roslyn source generator that resolves the graph at compile time was

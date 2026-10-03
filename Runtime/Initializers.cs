@@ -36,7 +36,9 @@ namespace OpenUGD
     /// <b>A phase that throws fails the build.</b> Everything constructed so far is disposed in reverse
     /// construction order and no <see cref="Context" /> is returned; the original exception is wrapped in a
     /// <see cref="ContextException" /> naming the step and the phase, with the original as its
-    /// <see cref="Exception.InnerException" />. A cancellation propagates unwrapped.
+    /// <see cref="Exception.InnerException" />. A cancellation of the build propagates unwrapped; an
+    /// <see cref="OperationCanceledException" /> a step throws while the build's token is <i>not</i> cancelled —
+    /// a timeout of its own, say — is that step failing, and is wrapped like any other exception.
     /// </para>
     /// </remarks>
     public enum BootPhase
@@ -112,7 +114,9 @@ namespace OpenUGD
         /// <param name="cancellationToken">
         /// Cancelled when the context's <see cref="OpenUGD.Lifetime" /> terminates or when the token passed
         /// to <see cref="ContextBuilder.BuildAsync" /> is cancelled. Observing it aborts the whole build,
-        /// so an implementation that ignores it delays the failure rather than avoiding it.
+        /// so an implementation that ignores it delays the failure rather than avoiding it. Only this token
+        /// cancels the build: an <see cref="OperationCanceledException" /> from a token of the service's
+        /// own fails it, as any other exception does.
         /// </param>
         /// <returns>
         /// A task that completes when this service is ready. <c>null</c> is accepted and treated as an

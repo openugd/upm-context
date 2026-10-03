@@ -270,9 +270,22 @@ namespace OpenUGD
                 var task = step.Run(context, token);
                 if (task != null) await task;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
+                // The build itself was cancelled - its scope ended or the caller's token fired - so this is not
+                // the step's failure, and it propagates unwrapped.
                 throw;
+            }
+            catch (OperationCanceledException exception)
+            {
+                // The build's token is not cancelled, so the step was cancelled by something of its own - a
+                // timeout, a token it made, a cancelled task it awaited. That is the step failing.
+                throw new ContextException(
+                    "'" + step.Name + "' was cancelled during the " + phase + " phase of Context.BuildAsync, " +
+                    "but not through the token the build passed it, so this is a failure of that step (a " +
+                    "timeout or a cancellation of its own) and not a cancellation of the build. The Context " +
+                    "was not built and everything constructed so far has been disposed. The original " +
+                    "exception is the InnerException.", exception);
             }
             catch (Exception exception)
             {

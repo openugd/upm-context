@@ -144,7 +144,9 @@ namespace OpenUGD
         /// <exception cref="ContextException">
         /// The graph did not validate; a registration factory returned <c>null</c> or an instance of the
         /// wrong type; or a constructor or a boot step threw, and those last two carry the original as their
-        /// <see cref="Exception.InnerException" />. An exception thrown by a registration factory itself is
+        /// <see cref="Exception.InnerException" />. A boot step that throws an
+        /// <see cref="OperationCanceledException" /> while the build is not cancelled has failed, and is
+        /// reported here too. An exception thrown by a registration factory itself is
         /// not wrapped: it propagates as it was thrown, after the same teardown.
         /// </exception>
         /// <exception cref="OperationCanceledException">
