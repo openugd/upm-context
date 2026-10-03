@@ -17,9 +17,11 @@ namespace OpenUGD
     /// <para>
     /// <b>It is not the only exception the container throws.</b> A bad argument is still an
     /// <see cref="ArgumentNullException"/> or <see cref="ArgumentException"/>, using a context after
-    /// <see cref="Context.Dispose"/> is still an <see cref="ObjectDisposedException"/>, and if tearing down
-    /// a half-built context fails as well the builder throws an <see cref="AggregateException"/> whose first
-    /// inner exception is the original failure.
+    /// <see cref="Context.Dispose"/> is still an <see cref="ObjectDisposedException"/>, building twice or
+    /// registering after the build is an <see cref="InvalidOperationException"/>, a build whose scope or
+    /// token ended is an <see cref="OperationCanceledException"/>, and if tearing down a half-built context
+    /// fails as well the builder throws an <see cref="AggregateException"/> whose first inner exception is
+    /// the original failure.
     /// </para>
     /// <para>
     /// <b><see cref="Path"/> is the dependency chain a failure happened on</b>: the loop of a circular

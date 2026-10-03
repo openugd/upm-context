@@ -223,28 +223,42 @@ silent and nothing is reflective about it.
 | `Registration` | What `Add` returns. `As(Type)` adds a contract. A struct — no allocation. |
 | `InitializerCollection` | Boot steps that are not services. `Mode` is Sequential by default; Parallel is opt-in. |
 | `IAwakeService`, `IInitializeService` | Opt-in async boot phases. Services enrol automatically. |
-| `ContextException` | The one exception the container throws. `Path` carries the dependency chain. |
+| `ContextException` | What a failed build, resolve or activation throws. `Path` carries the dependency chain. Bad arguments, a disposed context and cancellation throw the standard exceptions. |
 | `[Inject]` | Field/property injection, for objects the container did not construct. |
 | `[Inject(Optional = true)]` | Same, but injected only if registered. The member is left alone otherwise. |
 
-Core types carry at most three methods; the ergonomics live in extension methods, so you can add your
-own without touching the package.
+The core types stay small — `Context` does its work through `TryResolve`, `Instantiate` and `Inject` —
+and the ergonomics (`Resolve<T>`, `Add<T>`, `As<T>`, `AddInstance`, `TryAdd`) are extension methods, so
+you can add your own without touching the package.
 
 ## When it goes wrong
 
 That is the part this package exists for. A missing binding is caught at build time, in Microsoft's
-wording so your search reflexes transfer, plus the registration site and a closest-match suggestion:
+wording so your search reflexes transfer, with the registration site and, where the container can find
+one, the fix. Register a service only as itself while something asks for its interface:
+
+```csharp
+builder.Services.Add<FileStorage>();   // implements IStorage, but is registered only as itself
+builder.Services.Add<SaveService>();   // public SaveService(IStorage storage)
+```
+
+and the build throws a `ContextException` with this message — captured by the package's tests, with the
+call site's path and line replaced by a short one:
 
 ```
-Unable to resolve service for type 'IStorage' while attempting to activate 'SaveService'.
-  SaveService was registered at ProjectBoot.cs:14.
-  Did you mean 'IStorageService', which is registered?
+The Context could not be built. 1 problem was found while validating the service graph, before anything was constructed:
+  - Unable to resolve service for type 'MyGame.IStorage' while attempting to activate 'MyGame.SaveService'.
+      required by the constructor parameter 'storage'.
+      registered at Assets/Scripts/GameBoot.cs:14
+      'MyGame.FileStorage' is registered and does implement 'MyGame.IStorage', but was not registered as it. Add .As<IStorage>() to its registration.
 ```
 
-A dependency cycle is a `ContextException` naming the real path (`A → B → C → A`), never a
-`StackOverflowException`. Every problem in the graph is reported at once, not one per run. And nothing
-is constructed until the whole graph validates — a failed build leaves no half-initialised objects
-behind.
+Every problem in the graph is reported in that one message, not one per run, and nothing is constructed
+until the whole graph validates. A dependency cycle names its real path (`A -> B -> C -> A`, also in
+`ContextException.Path`), never a `StackOverflowException`. A constructor or factory that throws is
+reported with its registration site and the chain of services that led to it, and a boot step that
+throws with its name and where it was registered. Either way a failed build disposes what it had
+constructed and leaves no half-initialised objects behind.
 
 ## Requirements
 

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-07-29
+## [2.0.0]
 
 First release. The version starts at 2.0.0 because the whole OpenUGD family moved to a synchronized
 major version together. Minor and patch versions are independent: a 2.x package works with the 2.x
@@ -239,6 +239,14 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   waiting; the build is then abandoned as if the context had been disposed from inside it — cancelled at
   once, torn down once the steps in flight finish. A cancelled build now also starts no further step of
   the current rank, not just no further rank.
+
+- **The README shows output the package really produces** (audit CX-15, CX-33). Its "When it goes
+  wrong" example was a message the code could not produce — a different layout, and a "Did you mean"
+  suggestion the name-distance threshold never makes for those names. It now shows a message captured by
+  a test (`ReadmeExampleTests`), which also fails if the README stops showing it verbatim. Smaller false
+  claims are gone: `ContextException` is not "the one exception the container throws", the core types do
+  not "carry at most three methods", and this section no longer carries a release date for a version
+  that has not been released.
 
 ### Known limitations
 
