@@ -65,7 +65,7 @@ namespace OpenUGD.Tests
         protected Context Build(ContextBuilder builder,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            var context = RunSync(builder.BuildAsync(cancellationToken));
+            var context = RunSync(StartWithoutContext(() => builder.BuildAsync(cancellationToken)));
             Assert.IsNotNull(context, "BuildAsync must never hand back a null Context.");
             _contexts.Add(context);
             return context;
@@ -76,7 +76,7 @@ namespace OpenUGD.Tests
         protected static TException FailToBuild<TException>(ContextBuilder builder,
             CancellationToken cancellationToken = default(CancellationToken)) where TException : Exception
         {
-            var task = builder.BuildAsync(cancellationToken);
+            var task = StartWithoutContext(() => builder.BuildAsync(cancellationToken));
             var exception = Assert.Catch(() => RunSync(task));
             Assert.IsInstanceOf<TException>(exception,
                 "Expected " + typeof(TException).Name + " but got: " + exception);
@@ -109,7 +109,8 @@ namespace OpenUGD.Tests
         }
 
         /// Runs <paramref name="start"/> with no synchronization context, so that the build it starts
-        /// schedules its continuations on the thread pool, as it would under a plain test runner.
+        /// schedules its continuations on the thread pool rather than on a context whose thread is about to
+        /// block in <see cref="RunSync{T}"/> - which, under Unity's, would deadlock.
         protected static Task<T> StartWithoutContext<T>(Func<Task<T>> start)
         {
             var previous = SynchronizationContext.Current;

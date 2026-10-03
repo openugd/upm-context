@@ -278,7 +278,7 @@ namespace OpenUGD.Tests
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static WeakReference BuildAndDisposeAChild(Context parent, Lifetime own)
         {
-            var child = RunSync(Context.CreateBuilder(own, parent).BuildAsync());
+            var child = RunSync(StartWithoutContext(() => Context.CreateBuilder(own, parent).BuildAsync()));
             var weak = new WeakReference(child.Lifetime);
             child.Dispose();
             return weak;
