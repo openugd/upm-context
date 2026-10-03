@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,7 +15,8 @@ namespace OpenUGD
     /// <para>
     /// <b>Two things to fill in and one to call.</b> <see cref="Services" /> holds the registrations,
     /// <see cref="Initializers" /> the boot steps that belong to no service; then
-    /// <see cref="BuildAsync" />. Registration order does not matter for constructor dependencies — one is
+    /// <see cref="BuildAsync" /> — or <see cref="Build" /> from code that cannot await, for a graph whose
+    /// boot steps all complete synchronously. Registration order does not matter for constructor dependencies — one is
     /// always constructed and booted before whatever takes it — and otherwise decides only the order in
     /// which services of the same dependency rank boot (see <see cref="BootPhase" />).
     /// </para>
@@ -123,9 +126,13 @@ namespace OpenUGD
         /// finished — a concurrent rank is awaited whole — so it never disposes what a step is still using.
         /// </para>
         /// <para>
-        /// <b>It is not necessarily asynchronous.</b> A graph with no boot phases completes synchronously,
-        /// and the returned task is already finished; the method is awaitable so that a boot failure is
-        /// observable at all, which is the point.
+        /// <b>Await it; never block on it.</b> A graph whose boot steps all complete synchronously is
+        /// finished before this method returns, but blocking on the task — <c>.Result</c>,
+        /// <c>.Wait()</c>, <c>GetAwaiter().GetResult()</c> — deadlocks under a single-threaded
+        /// <see cref="SynchronizationContext" />, such as Unity's, as soon as one step really awaits: its
+        /// continuation is queued to the very thread that is blocked waiting for it. Continuations of the
+        /// build itself return to the caller's synchronization context. From code that cannot await, call
+        /// <see cref="Build" />, which never blocks.
         /// </para>
         /// <para>
         /// <b>Single use.</b> The <see cref="Services" /> and <see cref="Initializers" /> collections are
@@ -134,8 +141,8 @@ namespace OpenUGD
         /// </para>
         /// </remarks>
         /// <param name="cancellationToken">
-        /// Abandons the build: cancelling it cancels the token every boot step receives, the build stops
-        /// before the next dependency rank, and it tears down the same way a failure does. It is listened to
+        /// Abandons the build: cancelling it cancels the token every boot step receives, the build starts no
+        /// further boot step, and it tears down the same way a failure does. It is listened to
         /// only while the build runs; cancelling it after <c>BuildAsync</c> has returned changes nothing.
         /// The boot steps never see this token itself — they get one token that behaves the same whether or
         /// not this one was passed (see <see cref="IAwakeService.AwakeAsync" />).
@@ -168,7 +175,105 @@ namespace OpenUGD
         /// exception a service threw while disposing, or an <see cref="AggregateException" /> when several
         /// did. Call <see cref="AggregateException.Flatten" /> for the leaves.
         /// </exception>
-        public async Task<Context> BuildAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public Task<Context> BuildAsync(CancellationToken cancellationToken = default(CancellationToken)) =>
+            BuildCoreAsync(cancellationToken, null);
+
+        /// <summary>
+        /// Builds the context without awaiting — validation, construction, injection and both boot phases,
+        /// on the calling thread — for a graph whose boot steps all complete synchronously, from code that
+        /// cannot await: a constructor, a property, a Unity message.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>It never blocks.</b> Blocking on <see cref="BuildAsync" /> deadlocks under a single-threaded
+        /// <see cref="SynchronizationContext" />, such as Unity's, once a boot step really awaits. This
+        /// method does not wait: if a boot step returns a task that has not completed, it throws a
+        /// <see cref="ContextException" /> naming that step and where it was registered, and abandons the
+        /// build, exactly as <see cref="Context.Dispose" /> called from inside the build would. The build's
+        /// token is cancelled at once, no further step starts, and what the build had constructed is disposed
+        /// once the step in flight has finished — on whatever thread that step resumes on, never under it.
+        /// If that step then fails, or the teardown does, nothing awaits the abandoned build, so .NET reports
+        /// that only through <see cref="TaskScheduler.UnobservedTaskException" />.
+        /// </para>
+        /// <para>
+        /// Everything else is <see cref="BuildAsync" />'s — the validation, the atomic failure, the single
+        /// use — with its exceptions thrown here directly. For a graph with a step that may await, await
+        /// <see cref="BuildAsync" /> instead.
+        /// </para>
+        /// </remarks>
+        /// <returns>The built context, with every singleton constructed, injected and booted.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// This builder has already built its context.
+        /// </exception>
+        /// <exception cref="ContextException">
+        /// A boot step did not complete synchronously; or anything <see cref="BuildAsync" /> reports as a
+        /// <see cref="ContextException" />.
+        /// </exception>
+        /// <exception cref="OperationCanceledException">
+        /// The lifetime the builder was created on ended, or the parent context was disposed, before or
+        /// during the build; or the context was disposed from inside its own build.
+        /// </exception>
+        /// <exception cref="AggregateException">
+        /// The build failed and tearing down what had been constructed failed as well, as for
+        /// <see cref="BuildAsync" />.
+        /// </exception>
+        public Context Build()
+        {
+            var pending = new List<BootStep>();
+            var build = BuildCoreAsync(default(CancellationToken), pending);
+
+            // Finished: nothing was waited for, so reading the result here neither blocks nor deadlocks.
+            if (build.IsCompleted) return build.GetAwaiter().GetResult();
+
+            // Abandoned exactly as Context.Dispose from inside the build would: cancelled now, torn down once
+            // the steps in flight finish. A step that resumed on another thread may have finished the build
+            // in the meantime; then nobody holds the context, and this ends it at once.
+            var failure = new ContextException(NotSynchronous(pending));
+            try
+            {
+                _scope.End();
+            }
+            catch (Exception teardown)
+            {
+                throw new AggregateException(
+                    "The Context could not be built synchronously, and tearing down what had already been " +
+                    "constructed failed as well. The first inner exception is the original failure, the second " +
+                    "is the teardown; call Flatten() for the leaves.", failure, teardown);
+            }
+
+            throw failure;
+        }
+
+        private static string NotSynchronous(List<BootStep> pending)
+        {
+            var message = new StringBuilder();
+            if (pending.Count == 0)
+            {
+                message.Append("A boot step did not complete synchronously.");
+            }
+            else if (pending.Count == 1)
+            {
+                message.Append("The boot step '").Append(pending[0].Name).Append("' did not complete synchronously.");
+                if (pending[0].Site != null) message.Append("\n      registered at ").Append(pending[0].Site);
+            }
+            else
+            {
+                message.Append(pending.Count).Append(" boot steps did not complete synchronously:");
+                for (var i = 0; i < pending.Count; i++)
+                {
+                    message.Append("\n      '").Append(pending[i].Name).Append('\'');
+                    if (pending[i].Site != null) message.Append(", registered at ").Append(pending[i].Site);
+                }
+            }
+
+            return message.Append("\n      ContextBuilder.Build never waits, because waiting on the calling thread ")
+                .Append("deadlocks under a single-threaded SynchronizationContext such as Unity's. Await ")
+                .Append("BuildAsync for a graph with asynchronous boot steps. The build has been abandoned: its ")
+                .Append("token is cancelled, and what it constructed is disposed once the steps in flight finish.")
+                .ToString();
+        }
+
+        private async Task<Context> BuildCoreAsync(CancellationToken cancellationToken, List<BootStep> pending)
         {
             if (_built)
             {
@@ -210,7 +315,7 @@ namespace OpenUGD
                 context.EndBuild();
 
                 plan.CollectBootSteps(Initializers);
-                await plan.RunPhasesAsync(context, Initializers.Mode, token);
+                await plan.RunPhasesAsync(context, Initializers.Mode, token, pending);
 
                 token.ThrowIfCancellationRequested();
                 _scope.CompleteBuild(token);

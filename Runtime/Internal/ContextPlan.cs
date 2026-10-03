@@ -564,14 +564,17 @@ namespace OpenUGD
             _initialize = Sort(initialize);
         }
 
-        internal async Task RunPhasesAsync(Context context, StartupMode mode, CancellationToken token)
+        /// Runs both phases. A non-null pending list receives every step whose task had not completed when
+        /// the step returned it - what a synchronous build reports instead of waiting.
+        internal async Task RunPhasesAsync(Context context, StartupMode mode, CancellationToken token,
+            List<BootStep> pending)
         {
-            await RunPhaseAsync(_awake, BootPhase.Awake, context, mode, token);
-            await RunPhaseAsync(_initialize, BootPhase.Initialize, context, mode, token);
+            await RunPhaseAsync(_awake, BootPhase.Awake, context, mode, token, pending);
+            await RunPhaseAsync(_initialize, BootPhase.Initialize, context, mode, token, pending);
         }
 
         private static async Task RunPhaseAsync(BootStep[] steps, BootPhase phase, Context context,
-            StartupMode mode, CancellationToken token)
+            StartupMode mode, CancellationToken token, List<BootStep> pending)
         {
             var i = 0;
             while (i < steps.Length)
@@ -586,12 +589,28 @@ namespace OpenUGD
 
                 if (mode == StartupMode.Sequential || end - i == 1)
                 {
-                    for (var k = i; k < end; k++) await InvokeAsync(steps[k], phase, context, token);
+                    for (var k = i; k < end; k++)
+                    {
+                        // Before every step, not just every rank: an abandoned build starts nothing new.
+                        token.ThrowIfCancellationRequested();
+
+                        var task = InvokeAsync(steps[k], phase, context, token);
+                        if (pending != null && !task.IsCompleted) pending.Add(steps[k]);
+                        await task;
+                    }
                 }
                 else
                 {
                     var tasks = new Task[end - i];
                     for (var k = i; k < end; k++) tasks[k - i] = InvokeAsync(steps[k], phase, context, token);
+
+                    if (pending != null)
+                    {
+                        for (var k = i; k < end; k++)
+                        {
+                            if (!tasks[k - i].IsCompleted) pending.Add(steps[k]);
+                        }
+                    }
 
                     // Waits for every task in the rank even when one has already failed, so teardown never
                     // runs while a boot step is still touching the objects it is about to dispose. Awaiting

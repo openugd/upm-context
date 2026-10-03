@@ -64,17 +64,20 @@ namespace OpenUGD.Tests
 
         private Context Build(ContextBuilder builder)
         {
-            var context = RunSync(builder.BuildAsync());
+            var context = RunSync(() => builder.BuildAsync());
             _contexts.Add(context);
             return context;
         }
 
-        private static Context RunSync(Task<Context> task, int timeoutMilliseconds = 15000)
+        /// Starts the build with no synchronization context, so its continuations never queue to a context
+        /// whose thread is about to block here waiting for them - which, under Unity's, would deadlock.
+        private static Context RunSync(Func<Task<Context>> start, int timeoutMilliseconds = 15000)
         {
             var previous = SynchronizationContext.Current;
             SynchronizationContext.SetSynchronizationContext(null);
             try
             {
+                var task = start();
                 try
                 {
                     if (!task.Wait(timeoutMilliseconds))
@@ -98,8 +101,7 @@ namespace OpenUGD.Tests
         /// deliver it - unwrapped, with its own type intact.
         private static TException FailToBuild<TException>(ContextBuilder builder) where TException : Exception
         {
-            var task = builder.BuildAsync();
-            var exception = Assert.Catch(() => RunSync(task));
+            var exception = Assert.Catch(() => RunSync(() => builder.BuildAsync()));
             Assert.IsInstanceOf<TException>(exception,
                 "Expected " + typeof(TException).Name + " but got: " + exception);
             return (TException)exception;
@@ -556,8 +558,7 @@ namespace OpenUGD.Tests
             var source = new CancellationTokenSource();
             source.Cancel();
 
-            var task = builder.BuildAsync(source.Token);
-            Assert.Catch<OperationCanceledException>(() => RunSync(task));
+            Assert.Catch<OperationCanceledException>(() => RunSync(() => builder.BuildAsync(source.Token)));
 
             Assert.AreEqual(0, Probe.Constructed);
             Assert.IsTrue(builder.Lifetime.IsTerminated);
@@ -577,8 +578,7 @@ namespace OpenUGD.Tests
                 await Task.Delay(5000, ct);
             }, "cancels-itself");
 
-            var task = builder.BuildAsync(source.Token);
-            Assert.Catch<OperationCanceledException>(() => RunSync(task),
+            Assert.Catch<OperationCanceledException>(() => RunSync(() => builder.BuildAsync(source.Token)),
                 "Cancellation must not be wrapped in a ContextException.");
 
             CollectionAssert.AreEqual(new[] { "dispose:one" }, log);
@@ -594,9 +594,7 @@ namespace OpenUGD.Tests
                 await Task.Delay(5000, ct);
             }, "ends-the-scope");
 
-            var task = builder.BuildAsync();
-
-            Assert.Catch<OperationCanceledException>(() => RunSync(task));
+            Assert.Catch<OperationCanceledException>(() => RunSync(() => builder.BuildAsync()));
         }
 
         // ===== resolve-time failures =====
@@ -638,7 +636,7 @@ namespace OpenUGD.Tests
 
             Assert.IsTrue(builder.Lifetime.IsTerminated,
                 "Born terminated, like Lifetime.DefineNested on a terminated lifetime.");
-            Assert.Catch<OperationCanceledException>(() => RunSync(builder.BuildAsync()));
+            Assert.Catch<OperationCanceledException>(() => RunSync(() => builder.BuildAsync()));
             Assert.AreEqual(0, Probe.Constructed);
         }
 
@@ -652,7 +650,7 @@ namespace OpenUGD.Tests
             builder.Services.Add<Probe>();
 
             Assert.IsTrue(builder.Lifetime.IsTerminated);
-            var error = Assert.Catch<OperationCanceledException>(() => RunSync(builder.BuildAsync()));
+            var error = Assert.Catch<OperationCanceledException>(() => RunSync(() => builder.BuildAsync()));
             StringAssert.Contains("ended before BuildAsync", error.Message);
             Assert.AreEqual(0, Probe.Constructed);
         }

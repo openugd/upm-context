@@ -1066,7 +1066,7 @@ namespace OpenUGD.Tests
             Assert.IsTrue(task.IsCompleted,
                 "With no IAwakeService, no IInitializeService and no async initializer, BuildAsync must " +
                 "complete synchronously.");
-            var context = task.GetAwaiter().GetResult();
+            var context = RunSync(() => task);
             _contexts.Add(context);
             Assert.IsNotNull(context.Resolve<AlphaHolder>());
         }
@@ -1085,23 +1085,7 @@ namespace OpenUGD.Tests
 
             Assert.IsTrue(task.IsCompleted);
             Assert.IsTrue(ran);
-            _contexts.Add(task.GetAwaiter().GetResult());
-        }
-
-        [Test]
-        public void AChildContextCanBeBuiltFromASynchronousCallSite()
-        {
-            var parent = Build(NewBuilder("parent"));
-
-            var childBuilder = Context.CreateBuilder(lifetime: NewLifetime("child"), parent: parent);
-            childBuilder.Services.Add<Alpha>().As<IAlpha>();
-
-            var task = childBuilder.BuildAsync();
-
-            Assert.IsTrue(task.IsCompleted, "Opening a child scope must not require an await.");
-            var child = task.GetAwaiter().GetResult();
-            _contexts.Add(child);
-            Assert.IsNotNull(child.Resolve<IAlpha>());
+            _contexts.Add(RunSync(() => task));
         }
 
         [Test]
@@ -1125,10 +1109,7 @@ namespace OpenUGD.Tests
             builder.Services.Add<Alpha>();
             Build(builder);
 
-            Assert.Catch(() => {
-                var second = builder.BuildAsync();
-                if (second != null) second.GetAwaiter().GetResult();
-            }, "A builder must be usable exactly once.");
+            Assert.Catch(() => RunSync(() => builder.BuildAsync()), "A builder must be usable exactly once.");
         }
 
         [Test]

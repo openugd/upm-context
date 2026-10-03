@@ -65,17 +65,20 @@ namespace OpenUGD.Tests
 
         private Context Build(ContextBuilder builder)
         {
-            var context = RunSync(builder.BuildAsync());
+            var context = RunSync(() => builder.BuildAsync());
             _contexts.Add(context);
             return context;
         }
 
-        private static Context RunSync(Task<Context> task, int timeoutMilliseconds = 15000)
+        /// Starts the build with no synchronization context, so its continuations never queue to a context
+        /// whose thread is about to block here waiting for them - which, under Unity's, would deadlock.
+        private static Context RunSync(Func<Task<Context>> start, int timeoutMilliseconds = 15000)
         {
             var previous = SynchronizationContext.Current;
             SynchronizationContext.SetSynchronizationContext(null);
             try
             {
+                var task = start();
                 try
                 {
                     if (!task.Wait(timeoutMilliseconds))
@@ -97,8 +100,7 @@ namespace OpenUGD.Tests
 
         private static ContextException FailToBuild(ContextBuilder builder)
         {
-            var task = builder.BuildAsync();
-            var exception = Assert.Catch(() => RunSync(task));
+            var exception = Assert.Catch(() => RunSync(() => builder.BuildAsync()));
             Assert.IsInstanceOf<ContextException>(exception,
                 "Expected ContextException but got: " + exception);
             return (ContextException)exception;

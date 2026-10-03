@@ -18,7 +18,8 @@ This package replaces the context layer of `com.openugd.corelib` and the whole o
 
 - `Context` — the built container: `TryResolve`, `Instantiate`, `Inject`, `Dispose`, plus `Lifetime`
   and `Parent`. Everything else is an extension method.
-- `ContextBuilder` with `Services`, `Initializers` and a single `BuildAsync`.
+- `ContextBuilder` with `Services`, `Initializers` and `BuildAsync`, plus `Build` for code that cannot
+  await and a boot that completes synchronously.
 - `ServiceCollection.Add(Type, factory)` returning a `Registration` struct whose `As(contract)` adds a
   contract without replacing the self-registration, so `Add<A>().As<I1>().As<I2>()` leaves `A`, `I1`
   and `I2` all resolvable.
@@ -228,6 +229,16 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   while reading a new type by reflection — which runs code of the type's own, such as an attribute
   constructor — so one slow read stalled every other thread's lookup. Hits are now lock-free, and a type
   is read outside any lock.
+
+- **Nothing encourages blocking on `BuildAsync` any more, and `Build` replaces it** (audit CX-20).
+  The docs said a graph without asynchronous steps "completes synchronously" and the README and tests
+  read the result with `GetAwaiter().GetResult()`, which deadlocks under a single-threaded
+  synchronization context — Unity's main thread — as soon as one step really awaits. The docs now say to
+  await it and never block. The new `ContextBuilder.Build()` runs the build on the calling thread and,
+  if a boot step returns an unfinished task, throws a `ContextException` naming the step instead of
+  waiting; the build is then abandoned as if the context had been disposed from inside it — cancelled at
+  once, torn down once the steps in flight finish. A cancelled build now also starts no further step of
+  the current rank, not just no further rank.
 
 ### Known limitations
 

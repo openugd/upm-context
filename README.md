@@ -123,7 +123,7 @@ singletons die with its own `Lifetime` while the parent's survive. That is what 
 var windowScope = context.Lifetime.DefineNested("window");
 var wb = Context.CreateBuilder(windowScope, parent: context);
 wb.Services.AddInstance(model);
-var windowContext = await wb.BuildAsync();   // completes synchronously: nothing here is async
+var windowContext = wb.Build();              // no await: nothing here boots asynchronously
 
 windowScope.Terminate();                     // only the window's own singletons are disposed
 ```
@@ -151,6 +151,16 @@ register first the one that should boot first.
 On Unity's main thread that interleaves them rather than using other threads, so it only saves time when
 steps await I/O, and the order is no longer deterministic. Steps added to `builder.Initializers` run
 first, one at a time in the order they were added, in either mode.
+
+## Building without `await`
+
+Await `BuildAsync`; never block on it. `.Result`, `.Wait()` and `GetAwaiter().GetResult()` deadlock on
+Unity's main thread as soon as one boot step really awaits, because the step's continuation is queued to
+the very thread that is blocked waiting for it. From code that cannot await — a constructor, a property,
+`Awake` — call `builder.Build()`. It runs the same build on the calling thread and returns the context
+when every boot step completes synchronously. If a step returns an unfinished task, `Build` does not wait:
+it throws a `ContextException` naming that step and its registration, and abandons the build, which is
+cancelled at once and disposes what it constructed when that step finishes.
 
 ## Optional dependencies
 
@@ -208,7 +218,7 @@ silent and nothing is reflective about it.
 | Type | What it is |
 | --- | --- |
 | `Context` | The built container. `TryResolve`, `Instantiate`, `Inject`, `Dispose`. |
-| `ContextBuilder` | `Services`, `Initializers`, `BuildAsync`. |
+| `ContextBuilder` | `Services`, `Initializers`, `BuildAsync`, and `Build` for a boot that completes synchronously. |
 | `ServiceCollection` | `Add(Type, factory)`, `Contains`. Everything else is an extension. |
 | `Registration` | What `Add` returns. `As(Type)` adds a contract. A struct — no allocation. |
 | `InitializerCollection` | Boot steps that are not services. `Mode` is Sequential by default; Parallel is opt-in. |
