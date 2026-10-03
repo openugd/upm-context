@@ -216,12 +216,13 @@ Defects in unreleased snapshots of this package, found by the 2026-09 audit and 
   them, so which one is tried and named first no longer varies between runs (`Array.Sort` is unstable and
   did reorder them on .NET's runtime once a type had more than 16 constructors).
 - **A `MonoBehaviour`, `ScriptableObject` or other `UnityEngine.Object` is never constructed by
-  reflection** (audit CX-27). `Add<T>()` and `Instantiate<T>()` called its constructor, which in Unity
-  only logs a warning and yields an object with no native counterpart. Both now refuse such a type —
-  recognised by the full name of a base type, since the package has no engine reference — and say what to
-  do instead: register the object Unity made with `AddInstance`, or a factory that creates it the Unity
-  way; for `Instantiate`, create it and pass it to `Context.Inject`. (The other half of CX-27, engine
-  objects' properties leaking into configuration, left with the configuration system.)
+  reflection** (audit CX-27). `Add<T>()` and `Instantiate<T>()` called its constructor, which Unity does
+  not support: it logs a warning, and a component made that way has no native counterpart. Both now
+  refuse such a type — recognised by the full name of a base type, since the package has no engine
+  reference — and say what to do instead: register the object Unity made with `AddInstance`, or a factory
+  that creates it the Unity way; for `Instantiate`, create it and pass it to `Context.Inject`. (The other
+  half of CX-27, engine objects' properties leaking into configuration, left with the configuration
+  system.)
 - **A suggestion never asks for an `.As<>` that cannot be added** (audit CX-28). A missing
   `ILifetimeProvider` or `IServiceProvider` was answered with "add .As<…>() to its registration" for
   `Context`, which every context supplies itself and nobody registers, and a missing `object` with

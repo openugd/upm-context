@@ -101,8 +101,9 @@ namespace OpenUGD
             if (IsEngineObject(type))
             {
                 return "it derives from UnityEngine.Object - a MonoBehaviour, a ScriptableObject or another " +
-                       "engine object - which only Unity can create; one made by calling its constructor has no " +
-                       "native object behind it";
+                       "engine object - which Unity has to create itself: calling its constructor is not " +
+                       "supported, Unity warns about it, and a component made that way has no native object " +
+                       "behind it";
             }
 
             return null;
