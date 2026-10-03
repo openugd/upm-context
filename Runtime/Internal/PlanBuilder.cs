@@ -343,9 +343,14 @@ namespace OpenUGD
                 return true;
             }
 
+            /// What suggestions may name: every resolvable contract but the collections, which have no
+            /// registration to add .As to.
             private IEnumerable<Type> Known()
             {
-                foreach (var contract in _resolvable) yield return contract;
+                foreach (var contract in _resolvable)
+                {
+                    if (!_lists.ContainsKey(contract)) yield return contract;
+                }
             }
 
             // ------------------------------------------------------------------ cycles

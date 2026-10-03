@@ -127,7 +127,26 @@ namespace OpenUGD.Tests
             StringAssert.Contains("is also registered as an ordinary contract", error.Message);
         }
 
+        [Test]
+        public void ASuggestionNeverAsksToAddAsToACollection()
+        {
+            var builder = NewBuilder();
+            builder.Services.Add<FpsPanel>().AsElementOf<IPanel>();
+            builder.Services.Add<Menu>();
+            builder.Services.Add<NeedsCollection>();
+
+            var error = FailToBuild<ContextException>(builder);
+
+            StringAssert.Contains("IReadOnlyCollection", error.Message);
+            StringAssert.DoesNotContain(".As<", error.Message, "A collection has no registration to add .As<> to.");
+        }
+
         public interface IPanel { }
+
+        public sealed class NeedsCollection
+        {
+            public NeedsCollection(IReadOnlyCollection<IPanel> panels) { }
+        }
 
         public sealed class FpsPanel : IPanel { }
 

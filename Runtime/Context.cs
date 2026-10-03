@@ -375,7 +375,17 @@ namespace OpenUGD
 
         internal bool IsCollection(Type contract) => _collections.Contains(contract);
 
-        internal IEnumerable<Type> Contracts => _map.Keys;
+        /// Every contract registered or inherited here; not the collections, which no registration claims.
+        internal IEnumerable<Type> Contracts
+        {
+            get
+            {
+                foreach (var contract in _map.Keys)
+                {
+                    if (!_collections.Contains(contract)) yield return contract;
+                }
+            }
+        }
 
         internal IEnumerable<KeyValuePair<Type, object>> Instances
         {
