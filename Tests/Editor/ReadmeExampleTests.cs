@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace OpenUGD.Tests
 {
     /// <summary>
-    /// The README shows output the package really produces (audit CX-15): the message is captured here, and
+    /// The README shows output the package really produces: the message is captured here, and
     /// the README has to show it verbatim.
     /// </summary>
     [TestFixture]

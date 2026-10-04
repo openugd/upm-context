@@ -1,5 +1,7 @@
 # Context
 
+[![OpenUPM](https://img.shields.io/npm/v/com.openugd.context?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.openugd.context/) [![Tests](https://github.com/openugd/upm-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/openugd/upm-tools/actions/workflows/ci.yml)
+
 A composition root for Unity — **a library, not a framework**. You describe your singletons on a builder;
 `BuildAsync` validates the whole graph before it constructs anything, builds and boots it in dependency order,
 and either hands you a finished `Context` or reports every problem at once and leaves nothing half-built.
@@ -54,7 +56,7 @@ as well:
 
 ## Requirements
 
-- Unity 6000.0 or newer.
+- Unity 6000.0 or newer. Tested with 6000.0.41f1.
 - [`com.openugd.lifetime`](https://github.com/openugd/upm-lifetime) 2.0.0 or a later 2.x. Installing from
   OpenUPM brings it in.
 - Nothing else. The runtime assembly is compiled with `noEngineReferences`; only the samples reference
@@ -540,7 +542,12 @@ that is left and can be satisfied, which may not be the one you meant. So keep t
 described above rather than wait for the error.
 
 This was checked by running the UnityLinker of Unity 6000.0.41f1 and 6000.3.3f1 at Medium and High and
-executing the stripped assemblies; no IL2CPP player has been built with it yet.
+executing the stripped assemblies; the 6000.0.41f1 check also runs in the public CI described under
+[Running the tests](#running-the-tests). For the 2.0.0 release, IL2CPP WebGL players built with 6000.0.41f1
+at Medium and at High by
+[openugd/upm-tools' il2cpp-smoke](https://github.com/openugd/upm-tools#il2cpp-smokesh-one-il2cpp-player-that-boots-a-container)
+passed all their checks, which cover constructor and `[Inject]` member injection, both boot phases,
+`AsElementOf` lists (an empty one included) and child contexts. No iOS or Android IL2CPP player has been built.
 
 ### Threads
 
@@ -559,8 +566,9 @@ of hot loops.
 - **Activation uses reflection.** A source generator that resolves the graph at compile time is deferred. A
   factory registration is a reflection-free path that stays supported, so adding the generator later will not
   be a breaking change.
-- **`AsElementOf` lists** are arrays created at run time and exposed as `IReadOnlyList<T>`; this has been run
-  on Mono and CoreCLR, not yet in an IL2CPP player.
+- **`AsElementOf` lists** are arrays created at run time and exposed as `IReadOnlyList<T>`; they have run on
+  Mono, CoreCLR and in the IL2CPP WebGL players described under
+  [Managed code stripping](#managed-code-stripping-il2cpp), not yet in an iOS or Android player.
 
 ## API overview
 
@@ -617,6 +625,14 @@ already have:
 
 Then open *Window > General > Test Runner* and run the EditMode tests. Tests in the category `RequiresUnity`
 need the engine; the rest are plain .NET and use no engine API.
+
+The checks also run in public CI: [openugd/upm-tools](https://github.com/openugd/upm-tools/actions/workflows/ci.yml)
+compiles this package, its samples and the complete examples in this README (those that declare a type) against
+Unity 6000.0's assemblies and runs its engine-free tests on every change there and every Monday. The same CI runs
+Unity 6000.0.41f1's linker at Medium and High stripping over code that registers, instantiates and injects types
+through this package, checks that the constructors and `[Inject]` members the container needs survive, and runs
+the stripped result. The tests that need the editor (category `RequiresUnity`) run in a real Unity 6000.0.41f1
+editor before each release.
 
 ## Upgrading to 2.0
 
@@ -843,12 +859,41 @@ public static class Composition
 | `Register(type, resolver)`, `UnRegister(type)`, a custom `IResolver` | `builder.Services.Add(type, c => ...)` | No custom resolvers and no unregistering: a built context is fixed. Override a registration in a child context instead. |
 | `[Inject]` on a method | — | A compile error now: the attribute applies to constructors, fields and properties. 0.1.x accepted it on a method but `Inject` never called the method, so removing it changes no behaviour. |
 
+## The OpenUGD family
+
+Six packages, versioned together as 2.x and published on [OpenUPM](https://openupm.com/packages/?q=com.openugd)
+under the `com.openugd` scope. Installing one brings the ones it depends on.
+
+| Package | What it gives you | Depends on |
+| --- | --- | --- |
+| [Lifetime](https://github.com/openugd/upm-lifetime#readme) — `com.openugd.lifetime` | Scopes with deterministic, reverse-order clean-up | — |
+| [Signal](https://github.com/openugd/upm-signal#readme) — `com.openugd.signal` | Typed events whose subscriptions end with a lifetime | Lifetime |
+| [Context](https://github.com/openugd/upm-context#readme) — `com.openugd.context` | Dependency injection that validates the whole graph before it builds anything | Lifetime |
+| [CoreLib](https://github.com/openugd/upm-corelib#readme) — `com.openugd.corelib` | The Unity boundary: `ContextBehaviour`, presenters, commands, logging | Lifetime, Signal, Context |
+| [CoreLib uGUI Presenters](https://github.com/openugd/upm-corelib-widgets#readme) — `com.openugd.corelib.widgets` | Presenters that bind uGUI and TextMesh Pro controls to a model | CoreLib, Context, Signal, Lifetime, uGUI |
+| [uGUI Components](https://github.com/openugd/upm-ui#readme) — `com.openugd.ui` | Shader-free uGUI components: flip, gradient, invisible hit area | uGUI |
+
+Start with Lifetime and Signal for plain C# scopes and events, add Context for dependency injection, and CoreLib to
+run it inside a Unity scene. [`com.openugd.configuration`](https://github.com/openugd/upm-configuration), a
+string-keyed configuration for Context, is 0.x and not on OpenUPM yet. Other `com.openugd.*` packages on OpenUPM
+predate 2.0 and are not part of this family.
+
 ## Versioning
 
 The OpenUGD packages share a major version and have independent minor and patch versions. Each 2.x package
 works with the 2.x versions of its dependencies at or above the minimums declared in its `package.json`; for
 this package that is `com.openugd.lifetime` 2.0.0. The changes in each version are in
 [CHANGELOG.md](CHANGELOG.md).
+
+## Contributing
+
+Report a bug or an idea at [github.com/openugd/upm-context/issues](https://github.com/openugd/upm-context/issues):
+include the Unity version, the package version and, for an exception, the full message. To work on the package,
+clone it, reference the clone from a Unity 6 project (`"com.openugd.context": "file:../path/to/upm-context"` in
+`Packages/manifest.json`), add `com.openugd.context` to `testables`, and run its tests in the Test Runner. The
+project also needs `com.openugd.lifetime`: keep the scoped registry from [Install](#scoped-registry), or reference
+a clone of [upm-lifetime](https://github.com/openugd/upm-lifetime) the same way. The checks CI runs are scripts in
+[openugd/upm-tools](https://github.com/openugd/upm-tools); its README shows how to run them locally.
 
 ## Licence
 

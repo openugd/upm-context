@@ -6,11 +6,11 @@ using NUnit.Framework;
 namespace OpenUGD.Tests
 {
     /// <summary>
-    /// The contract with Unity's linker, checked by reflection so that level 1 catches a regression without
-    /// running the linker. What these tests pin down is what the linker gate proved keeps a stripped player
-    /// working: `[Inject]` is a Preserve attribute, and every entry point that hands a user type to the
-    /// activator carries `[DynamicallyAccessedMembers]` for its constructors. The linker matches both by
-    /// name, so these tests do too.
+    /// The contract with Unity's linker, checked by reflection so that the engine-free .NET run (level1.sh in
+    /// openugd/upm-tools) catches a regression without running the linker. What these tests pin down is what
+    /// the linker gate proved keeps a stripped player working: `[Inject]` is a Preserve attribute, and every
+    /// entry point that hands a user type to the activator carries `[DynamicallyAccessedMembers]` for its
+    /// constructors. The linker matches both by name, so these tests do too.
     /// </summary>
     [TestFixture]
     public class StrippingAnnotationTests

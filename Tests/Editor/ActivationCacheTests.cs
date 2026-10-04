@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace OpenUGD.Tests
 {
     /// <summary>
-    /// The per-type metadata cache behind construction and injection (audit CX-29): a cached type is looked up
+    /// The per-type metadata cache behind construction and injection: a cached type is looked up
     /// without a lock, and reading a new type - reflection, which may run the type's own code - holds up
     /// nobody else.
     /// </summary>

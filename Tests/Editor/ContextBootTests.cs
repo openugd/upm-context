@@ -12,7 +12,7 @@ namespace OpenUGD.Tests
     [TestFixture]
     public class ContextBootTests : ContextFixture
     {
-        // ===== a step's own cancellation (CX-12) =====
+        // ===== a step's own cancellation =====
 
         [Test]
         public void AStepCancelledByATokenOfItsOwnFailsTheBuildInsteadOfCancellingIt()
@@ -62,7 +62,7 @@ namespace OpenUGD.Tests
             Assert.IsNotInstanceOf<ContextException>(error);
         }
 
-        // ===== several concurrent failures (CX-11) =====
+        // ===== several concurrent failures =====
 
         [Test]
         public void EveryFailingStepOfAParallelRankIsReported()
@@ -110,7 +110,7 @@ namespace OpenUGD.Tests
                 "One failure is not wrapped in an aggregate: its InnerException is the step's own exception.");
         }
 
-        // ===== explicit steps (CX-10) =====
+        // ===== explicit steps =====
 
         [Test]
         public void ExplicitStepsRunOneAtATimeInAddOrderEvenUnderParallel()
@@ -164,7 +164,7 @@ namespace OpenUGD.Tests
             CollectionAssert.AreEqual(new[] { "step:a", "step:b", "service" }, log.Entries);
         }
 
-        // ===== what counts towards rank (CX-9) =====
+        // ===== what counts towards rank =====
 
         [Test]
         public void AServiceBootsAfterACollaboratorItHoldsThroughAMemberWhateverTheOrder(

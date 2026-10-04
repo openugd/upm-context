@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace OpenUGD.Tests
 {
     /// <summary>
-    /// Ownership goes by the object, not by the registration (audit CX-1): an object that answers to several
+    /// Ownership goes by the object, not by the registration: an object that answers to several
     /// registrations is injected, booted and disposed at most once, an object handed to <c>AddInstance</c> is
     /// never disposed, and a child never disposes, injects or boots an object its parent holds.
     /// </summary>

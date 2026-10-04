@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace OpenUGD.Tests
 {
     /// <summary>
-    /// One standard for every failure the container reports (audit CX-8, CX-14): what failed, where it was
+    /// One standard for every failure the container reports: what failed, where it was
     /// registered, the chain that led to it, and a fix where there is one.
     /// </summary>
     [TestFixture]

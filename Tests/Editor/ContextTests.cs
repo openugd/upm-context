@@ -468,10 +468,9 @@ namespace OpenUGD.Tests
         [Test]
         public void Inject_LeavesUnmarkedMembersAlone()
         {
-            // OVERRIDDEN (fixture only): the blind version registered IAlpha alone, but the target also
-            // carries an [Inject] IBeta property, and an [Inject] member that cannot be resolved is an
-            // error in this package - that is the whole point. IBeta is registered so the test can make
-            // the claim it is actually about: an UNMARKED member is never written to.
+            // IBeta is registered too: the target also carries an [Inject] IBeta property, and an [Inject]
+            // member that cannot be resolved is an error in this package. With it registered, the test makes
+            // the claim it is about: an UNMARKED member is never written to.
             var builder = NewBuilder();
             builder.Services.Add<Alpha>().As<IAlpha>();
             builder.Services.Add<Beta>().As<IBeta>();

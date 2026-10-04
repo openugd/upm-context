@@ -29,7 +29,7 @@ README's "Upgrading to 2.0" section is the migration guide.
 - `ContextException` with the dependency `Path`. A failed build lists every problem with its registration site.
 - IL2CPP stripping support without `link.xml`: `[Inject]` derives from a linker `Preserve` attribute, and the
   registration entry points carry `[DynamicallyAccessedMembers]`. Checked with the UnityLinker of 6000.0.41f1
-  and 6000.3.3f1 at Medium and High; no IL2CPP player was built.
+  and 6000.3.3f1 at Medium and High, and in IL2CPP WebGL players built with 6000.0.41f1 at Medium and High.
 - Samples: Basic Boot, Child Scopes, Collections, MonoBehaviour Injection, each with EditMode tests.
 - An EditMode test assembly, `com.openugd.context.tests`.
 
@@ -61,11 +61,12 @@ Not carried over from the layer this package replaces.
 - `ContextServiceBuilderOptions`: register a settings object with `AddInstance`.
 - `[Inject]` on methods: now a compile error. 0.1.x accepted it there but never called the method.
 
-### Changed during the 2.0.0 cycle
+### For code written against a pre-release snapshot
 
-Affects code written against an unreleased snapshot of this package, as the rest of the OpenUGD family was.
+2.0.0 is the first release. Code written against an unreleased snapshot of this package needs these changes:
 
-- **Breaking: the configuration system moved out** to `com.openugd.configuration` (0.x, not part of the 2.0
+- **Breaking: the configuration system moved out** to
+  [`com.openugd.configuration`](https://github.com/openugd/upm-configuration) (0.x, not part of the 2.0
   release), with `ContextBuilder.Configuration` and the automatic `IConfiguration` registration. Register a
   settings object with `AddInstance`, or call that package's `builder.AddConfiguration()`.
 - **Breaking: `IContextInitializer` and `BootPhase.Configure` are gone.** Take `Context` as a constructor
@@ -83,34 +84,9 @@ Affects code written against an unreleased snapshot of this package, as the rest
   `InvalidOperationException` from `CreateBuilder`.
 - **The minimum Unity version is 6000.0.**
 
-### Fixed
+Those snapshots also had defects that 2.0.0 fixes: among others, a boot step's own cancellation passed for a
+cancelled build, a `StartupMode.Parallel` rank reported only its first failure, an object answering to several
+registrations could be injected, booted or disposed more than once, and a child given a lifetime of its own did
+not end with its parent. The README describes how 2.0.0 behaves.
 
-Defects in unreleased snapshots, found by the 2026-09 audit and fixed before release.
-
-- A boot step's own cancellation (a timeout of its own) fails that step instead of passing for a cancelled
-  build (CX-12).
-- Every failing step of a `StartupMode.Parallel` rank is reported, not only the first (CX-11).
-- Steps added to `InitializerCollection` run one at a time in the order added, in both modes (CX-10).
-- An object answering to several registrations is injected, booted and disposed once, and a child never
-  injects, boots or disposes an object its parent holds (CX-1).
-- A service no longer boots before a collaborator it holds through an `[Inject]` member (CX-9).
-- Ending a context's scope mid-boot cancels the build first and disposes only after the steps in flight finish
-  (CX-2).
-- Boot steps get the same token whether or not one was passed to `BuildAsync`; it is cancelled when the
-  context ends, before anything is disposed (CX-13).
-- A child given a lifetime of its own still ends with its parent (CX-3).
-- A registration factory that throws is reported with its registration site (CX-8).
-- Construction failures carry the chain of services being built, also in `ContextException.Path`; a cycle
-  through a factory or a resolving constructor is reported as a cycle (CX-14).
-- A throwing `[Inject]` setter, and a failing boot step, are reported with the member or step and its
-  registration site (CX-14).
-- `Instantiate` reports a missing dependency in the build's wording, with its suggestions (CX-14).
-- `Instantiate` rejects two equally wide satisfiable constructors as the build does; constructors are sorted
-  stably (CX-23).
-- A `MonoBehaviour`, `ScriptableObject` or other `UnityEngine.Object` is never constructed by reflection; the
-  error says what to register instead (CX-27).
-- Suggestions never ask for an `.As<>` that cannot be added, and write generic contracts as C# does (CX-28).
-- Reading cached type metadata takes no lock (CX-29).
-- Nothing encourages blocking on `BuildAsync`; `Build` is the synchronous path (CX-20).
-- The README shows an error message the package really produces, checked by a test (CX-15, CX-33).
-- The README says to end a root context with the play session (CX-21).
+[2.0.0]: https://github.com/openugd/upm-context/releases/tag/2.0.0

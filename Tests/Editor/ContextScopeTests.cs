@@ -12,7 +12,7 @@ namespace OpenUGD.Tests
     [TestFixture]
     public class ContextScopeTests : ContextFixture
     {
-        // ===== ending the scope while a boot step runs (CX-2) =====
+        // ===== ending the scope while a boot step runs =====
 
         [Test]
         public void EndingTheScopeMidStepCancelsFirstAndDisposesOnlyAfterTheStepHasFinished()
@@ -81,7 +81,7 @@ namespace OpenUGD.Tests
         [Test]
         public void DisposingTheContextFromARegistrationFactoryCancelsTheBuildAndTearsDownAfterConstruction()
         {
-            // Review of CX-2: the docs promise the factory case as well as the boot-step one.
+            // Ending the scope from a registration factory behaves as ending it from a boot step does.
             var builder = NewBuilder();
             var log = new Log();
             builder.Services.AddInstance(log);
@@ -135,7 +135,7 @@ namespace OpenUGD.Tests
                 log.Entries, "Teardown stays in reverse order of construction, actions and disposals interleaved.");
         }
 
-        // ===== the boot token (CX-13) =====
+        // ===== the boot token =====
 
         [Test]
         public void TheBootTokenIsCancelledFirstWhenTheContextEndsWhetherOrNotTheCallerPassedOne(
@@ -198,7 +198,7 @@ namespace OpenUGD.Tests
             CollectionAssert.AreEqual(new[] { "disposed" }, log.Entries);
         }
 
-        // ===== a child and its parent (CX-3) =====
+        // ===== a child and its parent =====
 
         [Test]
         public void AChildGivenALifetimeOfItsOwnStillEndsWithItsParentAndBeforeItsParentsServices()
@@ -299,7 +299,7 @@ namespace OpenUGD.Tests
         [Test]
         public void AContextIsReachableOnlyThroughTheLifetimeItWasCreatedOn()
         {
-            // Review of CX-2: linking the scope instead of nesting it must not root it somewhere else. A
+            // Linking the scope instead of nesting it must not root it somewhere else. A
             // context on a lifetime that nothing else holds is collected with that lifetime, as a nested
             // scope would be - it is not kept, with every service it built, for the life of the process.
             var weak = OnAThreadOfItsOwn(BuildOnALifetimeNothingHolds);

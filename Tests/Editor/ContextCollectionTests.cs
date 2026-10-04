@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace OpenUGD.Tests
 {
     /// <summary>
-    /// Several modules contributing to one thing (decision 2d): <c>AsElementOf&lt;T&gt;</c> contributions
+    /// Several modules contributing to one list: <c>AsElementOf&lt;T&gt;</c> contributions
     /// resolve only as <c>IReadOnlyList&lt;T&gt;</c>, in registration order, local to the context, empty when
     /// none, built after every element.
     /// </summary>

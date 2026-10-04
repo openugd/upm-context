@@ -10,7 +10,7 @@ namespace OpenUGD.Tests
 {
     /// <summary>
     /// Building from code that cannot await, and building under a single-threaded synchronization context
-    /// such as Unity's (audit CX-20, CX-22): <c>Build</c> never blocks, and an awaited build's continuations
+    /// such as Unity's: <c>Build</c> never blocks, and an awaited build's continuations
     /// come back to the calling thread without deadlocking it.
     /// </summary>
     [TestFixture]
